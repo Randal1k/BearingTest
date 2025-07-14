@@ -44,11 +44,16 @@ plt.subplot(3,1,3)
 plt.plot(t2,z2)
 
 x_fft,t_fft = fft_transform(x)
-y_fft,t2_fft = fft_transform(x)
-z_fft,t3_fft = fft_transform(x)
+y_fft,t2_fft = fft_transform(y)
+z_fft,t3_fft = fft_transform(z)
 
-plt.figure("FFT")
+plt.figure("XFFT")
 plt.plot(x_fft,t_fft)
+plt.grid()
+plt.xlim(0,2000)
+
+plt.figure("YFFT")
+plt.plot(y_fft,t2_fft)
 plt.grid()
 plt.xlim(0,2000)
 
