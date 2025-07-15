@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pn
 from scipy.fft import fft,fftfreq
+from scipy.signal import butter,filtfilt,sosfilt
 
 
 def load_file(filename):
@@ -23,6 +24,25 @@ def fft_transform(x):
     yf2 = 2.0 / N * np.abs(yf[0:N//2])
     return xf,yf2
 
+
+'''
+    Filtr do sygnału
+        data        = sygnal do filtracji
+        fs          = czest. probkowania
+        freqLimit   = czest. odciecia
+        filterType  = typ filtra // low lub lp - dolnoprzepustowy, high lub hp - gornoprzepustowy
+        order       = rzad filtra
+'''
+def signal_filter(data,fs,freqLimit, filterType, order):
+    # sos = butter(order, freqLimit ,btype=filterType,fs = fs, output='sos')
+    # filtered = sosfilt(sos,data)
+    # return filtered
+
+    Wn = freqLimit/ (fs/2)
+    b,a = butter(order, Wn, btype=filterType, analog=False)
+    return filtfilt(b,a,data)
+
+
 # Main program
 t,x,y,z = load_file("res/normalne11.csv")
 t2,x2,y2,z2 = load_file("res/lozysko_2.csv")
@@ -35,28 +55,57 @@ plt.plot(t,y)
 plt.subplot(3,1,3)
 plt.plot(t,z)
 
-plt.figure("Uszkodzone")
+# plt.figure("Uszkodzone")
+# plt.subplot(3,1,1)
+# plt.plot(t2,x2)
+# plt.subplot(3,1,2)
+# plt.plot(t2,y2)
+# plt.subplot(3,1,3)
+# plt.plot(t2,z2)
+#
+xFFT,txFFT = fft_transform(x)
+yFFT,tyFFT = fft_transform(y)
+zFFT,tzFFT = fft_transform(z)
+
+plt.figure("FFT")
 plt.subplot(3,1,1)
-plt.plot(t2,x2)
+plt.plot(xFFT,txFFT)
+plt.grid()
+plt.xlim(0,2000)
+
 plt.subplot(3,1,2)
-plt.plot(t2,y2)
+plt.plot(yFFT,tyFFT)
+plt.grid()
+plt.xlim(0,2000)
+
 plt.subplot(3,1,3)
-plt.plot(t2,z2)
-
-x_fft,t_fft = fft_transform(x)
-y_fft,t2_fft = fft_transform(y)
-z_fft,t3_fft = fft_transform(z)
-
-plt.figure("XFFT")
-plt.plot(x_fft,t_fft)
+plt.plot(zFFT,tzFFT)
 plt.grid()
 plt.xlim(0,2000)
 
-plt.figure("YFFT")
-plt.plot(y_fft,t2_fft)
+xFiltr = signal_filter(y, 20000, 500,'lp',10)
+yFiltr = signal_filter(y, 20000, 500,'lp',10)
+zFiltr = signal_filter(z, 20000, 500,'lp',10)
+
+xFiltrFFT,txFiltrFFT = fft_transform(xFiltr)
+yFiltrFFT,tyFiltrFFT = fft_transform(yFiltr)
+zFiltrFFT,tzFiltrFFT = fft_transform(zFiltr)
+
+plt.figure("FFT Filtr")
+plt.subplot(3,1,1)
+plt.plot(xFiltrFFT,txFiltrFFT)
 plt.grid()
 plt.xlim(0,2000)
 
+plt.subplot(3,1,2)
+plt.plot(yFiltrFFT,tyFiltrFFT)
+plt.grid()
+plt.xlim(0,2000)
+
+plt.subplot(3,1,3)
+plt.plot(zFiltrFFT,tzFiltrFFT)
+plt.grid()
+plt.xlim(0,2000)
 
 plt.show()
 
