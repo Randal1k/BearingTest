@@ -1,4 +1,5 @@
 #imports
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,8 +7,7 @@ import pandas as pn
 from scipy.fft import fft,fftfreq
 from scipy.signal import butter,filtfilt
 from scipy.stats import skew, kurtosis
-import  statistics
-import math
+from tqdm import tqdm
 
 def load_file(filename):
     try:
@@ -17,6 +17,61 @@ def load_file(filename):
     except Exception as e:
         print(f'Error Loading {filename}: {e}')
         return None
+
+def get_folder_name(folderName):
+    folder = folderName.lower()
+    if folder == 'normal':
+        return 'normal'
+    elif folder == 'bearing':
+        return 'bearing'
+    elif folder == 'unbalance':
+        return 'unbalance'
+    elif folder == 'misalignment':
+        return 'misalignment'
+    else:
+        return 'normal'
+
+def load_data(folderPath):
+    allFiles = []
+
+    failedFile = []
+    featureList = []
+    labels = []
+
+    for subfolder in os.listdir(folderPath):
+        subfolderPath = os.path.join(folderPath,subfolder)
+
+        if os.path.isdir(subfolderPath):
+            csvFiles = [f for f in os.listdir(subfolderPath) if f.endswith('.csv')]
+
+            for filename in csvFiles:
+                filePath = os.path.join(subfolderPath, filename)
+                allFiles.append((filePath, subfolder))
+
+    #Process
+
+    for filePath, folderName in tqdm(allFiles, desc="Processing files"):
+        try:
+            # Load signal data
+            signal = load_file(filePath)
+            if signal is None:
+                failedFile.append(filePath)
+                continue
+
+            # Extract features
+            features = process_signal(signal)
+            featureList.append(features)
+
+            # Get label from folder name
+            label = get_folder_name(folderName)
+            labels.append(label)
+
+        except Exception as e:
+            print(f"Error processing {filePath}: {e}")
+            failedFile.append(filePath)
+
+    return featureList, labels
+
 def signal_FFT(data):
     windowed_signal = data * np.hanning(len(data))
     N = len(data)
@@ -88,120 +143,98 @@ def calculate_features(data, axis):
 
     return features
 
+def process_signal(data):
+    allFeatures = {}
+    for axis in ['x', 'y', 'z']:
+        time_signal = data[axis]
+
+        fftFreq, fftMag = signal_FFT(time_signal)
+        normalizedSignal = signal_normalization(fftMag)
+
+        feature = calculate_features(normalizedSignal, axis)
+        allFeatures.update(feature)
+
+    return allFeatures
+
+def plot_axis_features(axis, featureList,labels):
+    axis_features = {}
+    # plotsNames = ['mean', 'std', 'rms', 'p2p', 'if', 'skewness', 'Kurtosis', 'crest_factor', 'shape_factor']
+    # featN= np.arange(0, 27, 3)
+    if featureList:
+        firstSample = featureList[0]
+        featureNames = [key for key in firstSample.keys() if key.endswith(f'_{axis}')]
+
+        # Extract values for each X-axis feature
+        for Name in featureNames:
+            axis_features[Name] = []
+
+            for sample in featureList:
+                axis_features[Name].append(sample.get(Name, 0))
+
+    fig, axs = plt.subplots(3,3, figsize=(15,8))
+    axs = axs.flatten()
+    fig.set_size_inches(8, 6)
+
+    startBear = labels.count('bearing')
+    startNorm = startBear + labels.count('normal')
+    startUnbal = startNorm + labels.count('unbalance')
+    startMisal =  startUnbal + labels.count('misalignment')
+    print(startBear)
+    print(startNorm)
+    print(startUnbal)
+    print(startMisal)
+
+
+    for i, (plotname, values) in enumerate(axis_features.items()):
+        bearing = values[:startBear]
+        normal = values[startBear:startNorm]
+        unbal = values[startNorm:startUnbal]
+        misal = values[startUnbal:]
+
+        axs[i].plot(bearing, 'g' )
+        axs[i].plot(normal, 'b' )
+        axs[i].plot(unbal, 'r' )
+        axs[i].plot(misal, 'orange')
+        axs[i].set_title(plotname)
+        axs[i].set_xlabel('Index')
+        axs[i].set_ylabel('Value')
+        axs[i].grid(True)
+    plt.tight_layout()
+    plt.show()
+    return axis_features
 
 # Main program
-signal = load_file('res/normalne11.csv')
-#t,x,y,z = load_file("res/normal_000_Ch08_100g_PE_Acceleration.csv")
-#t2,x2,y2,z2 = load_file("res/lozysko_2.csv")
-
-
-# Normalny sygnal
-plt.figure("Normalnie")
-plt.subplot(3,1,1)
-plt.plot(signal.t,signal.x)
-plt.subplot(3,1,2)
-plt.plot(signal.t,signal.y)
-plt.subplot(3,1,3)
-plt.plot(signal.t,signal.z)
-
-plt.tight_layout()
-
-# plt.figure("Uszkodzone")
-# plt.subplot(3,1,1)
-# plt.plot(t2,x2)
-# plt.subplot(3,1,2)
-# plt.plot(t2,y2)
-# plt.subplot(3,1,3)
-# plt.plot(t2,z2)
+# signal = load_file('res/normalne11.csv')
 #
-
-
-xFFT_freq,xFFT_mag = signal_FFT(signal.x)
-yFFT_freq,yFFT_mag = signal_FFT(signal.y)
-zFFT_freq,zFFT_mag = signal_FFT(signal.z)
-
-
-#FFT
-plt.figure("FFT")
-plt.subplot(3,1,1)
-plt.plot(xFFT_freq,xFFT_mag)
-plt.grid()
-plt.xlim(0,2000)
-
-plt.subplot(3,1,2)
-plt.plot(yFFT_freq,yFFT_mag)
-plt.grid()
-plt.xlim(0,2000)
-
-plt.subplot(3,1,3)
-plt.plot(zFFT_freq,zFFT_mag)
-plt.grid()
-plt.xlim(0,2000)
-plt.tight_layout()
-
-xFiltr = signal_filter(signal.x, 20000, 500,'lp',10)
-yFiltr = signal_filter(signal.y, 20000, 500,'lp',10)
-zFiltr = signal_filter(signal.z, 20000, 500,'lp',10)
-
-
-# FFT po filtracji
-xFiltrFFT,txFiltrFFT = signal_FFT(xFiltr)
-yFiltrFFT,tyFiltrFFT = signal_FFT(yFiltr)
-zFiltrFFT,tzFiltrFFT = signal_FFT(zFiltr)
-
-# plt.figure("FFT Filtr")
-# plt.subplot(3,1,1)
-# plt.plot(xFiltrFFT,txFiltrFFT)
-# plt.grid()
-# plt.xlim(0,2000)
+# xFFT_freq,xFFT_mag = signal_FFT(signal.x)
+# yFFT_freq,yFFT_mag = signal_FFT(signal.y)
+# zFFT_freq,zFFT_mag = signal_FFT(signal.z)
 #
-# plt.subplot(3,1,2)
-# plt.plot(yFiltrFFT,tyFiltrFFT)
-# plt.grid()
-# plt.xlim(0,2000)
 #
-# plt.subplot(3,1,3)
-# plt.plot(zFiltrFFT,tzFiltrFFT)
-# plt.grid()
-# plt.xlim(0,2000)
+# xFiltr = signal_filter(signal.x, 20000, 500,'lp',10)
+# yFiltr = signal_filter(signal.y, 20000, 500,'lp',10)
+# zFiltr = signal_filter(signal.z, 20000, 500,'lp',10)
+#
+#
+# # FFT po filtracji
+# xFiltrFFT,txFiltrFFT = signal_FFT(xFiltr)
+# yFiltrFFT,tyFiltrFFT = signal_FFT(yFiltr)
+# zFiltrFFT,tzFiltrFFT = signal_FFT(zFiltr)
+#
+# # Normalizacja
+# xNorm = signal_normalization(xFFT_mag)
+# yNorm = signal_normalization(yFFT_mag)
+# zNorm = signal_normalization(zFFT_mag)
+
+features, labels = load_data('res/data/')
 
 
-# Normalizacja
-xNorm = signal_normalization(xFFT_mag)
-yNorm = signal_normalization(yFFT_mag)
-zNorm = signal_normalization(zFFT_mag)
 
-plt.figure("Normalization")
-plt.subplot(3,1,1)
-plt.plot(xFFT_freq,xNorm)
-plt.grid()
-plt.xlim(0,2000)
-
-plt.subplot(3,1,2)
-plt.plot(yFFT_freq,yNorm)
-plt.grid()
-plt.xlim(0,2000)
-
-plt.subplot(3,1,3)
-plt.plot(zFFT_freq,zNorm)
-plt.grid()
-plt.xlim(0,2000)
-plt.tight_layout()
-
-plt.show()
-
-allFeatures = {}
-
-for axis in ['x','y','z']:
-    time_signal = signal[axis]
-
-    fftFreq, fftMag = signal_FFT(time_signal)
-    normalizedSignal = signal_normalization(fftMag)
-
-    feature = calculate_features(fftMag, axis)
-    allFeatures.update(feature)
-
-
-print(allFeatures)
+#print(xFeatures)
+# print("Features =================================")
+print(features)
+# print("Labels =================================")
+print(labels)
+xFeatures = plot_axis_features('x', features, labels)
 print("")
 
