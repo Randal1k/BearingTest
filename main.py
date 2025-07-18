@@ -102,6 +102,8 @@ def load_data(folderPath):
             print(f"Error processing {filePath}: {e}")
             failedFile.append(filePath)
 
+    save_features(featureList)
+
     return featureList, labels
 
 def signal_FFT(data):
@@ -279,7 +281,6 @@ def plot_axis_features_from_file(axis,feature):
     axes[0].legend(loc='upper right', fontsize='small')
     fig.suptitle(f'Porównanie cech dla osi {axis.upper()}', fontsize=16)
     plt.tight_layout(rect=[0, 0, 1, 0.97])
-    plt.show()
 
 def prepare_training_data(features, labels):
     global scaler, feature_names
@@ -373,26 +374,7 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
             feature_importance_df.to_csv(importance_path, index=False)
             print(f"Feature importance saved to {importance_path}")
 
-        # 2. Save scaler parameters to CSV
-        if scaler is not None:
-            scaler_df = pd.DataFrame({
-                'feature_name': feature_names,
-                'mean': scaler.mean_,
-                'scale': scaler.scale_,
-                'variance': scaler.var_
-            })
-
-            scaler_path = f"{base_name}_scaler_params.csv"
-            scaler_df.to_csv(scaler_path, index=False)
-            print(f"Scaler parameters saved to {scaler_path}")
-
-        # 3. Save model metadata to JSON
-        metadata_path = f"{base_name}_metadata.json"
-        with open(metadata_path, 'w') as f:
-            json.dump(training_metadata, f, indent=2)
-        print(f"Model metadata saved to {metadata_path}")
-
-        # 4. Save model summary to text file
+        # 2. Save model summary to text file
         summary_path = f"{base_name}_summary.txt"
         with open(summary_path, 'w') as f:
             f.write("TOOL CONDITION MONITOR - MODEL SUMMARY\n")
@@ -502,8 +484,6 @@ def predict_condition(filepath):
             'faulty': float(probabilities[2])
         },
         'recommendations': recommendations,
-        'extracted_features': features,
-        'prediction_timestamp': datetime.now().isoformat()
     }
 
 def init_prediction(filepath='trained_tool_monitor.pkl'):
@@ -537,59 +517,62 @@ def init_training(folderPath):
     print("Training complete!")
 
 # Main program
-# signal = load_file('res/normalne11.csv')
-#
-# xFFT_freq,xFFT_mag = signal_FFT(signal.x)
-# yFFT_freq,yFFT_mag = signal_FFT(signal.y)
-# zFFT_freq,zFFT_mag = signal_FFT(signal.z)
-#
-#
-# xFiltr = signal_filter(signal.x, 20000, 500,'lp',10)
-# yFiltr = signal_filter(signal.y, 20000, 500,'lp',10)
-# zFiltr = signal_filter(signal.z, 20000, 500,'lp',10)
-#
-#
-# # FFT po filtracji
-# xFiltrFFT,txFiltrFFT = signal_FFT(xFiltr)
-# yFiltrFFT,tyFiltrFFT = signal_FFT(yFiltr)
-# zFiltrFFT,tzFiltrFFT = signal_FFT(zFiltr)
-#
-# # Normalizacja
-# xNorm = signal_normalization(xFFT_mag)
-# yNorm = signal_normalization(yFFT_mag)
-# zNorm = signal_normalization(zFFT_mag)
-
-
 
 #init_training('res/data')
 
-predict = init_prediction('trained_tool_monitor.pkl')
+# predict = init_prediction('trained_tool_monitor.pkl')
+# result = predict('res/normalne11.csv')
+# print(result)
 
-result = predict('res/os_3.csv')
-print(result)
+#features, labels = load_data('res/data/')
+#save_features(features)
+
+signal = load_file('res/balans_2.csv')
+
+xfreq, xmag = signal_FFT(signal.x)
+yfreq, ymag = signal_FFT(signal.y)
+zfreq, zmag = signal_FFT(signal.z)
+
+xnorm = signal_normalization(xmag)
+ynorm = signal_normalization(ymag)
+znorm = signal_normalization(zmag)
+
+plt.figure("Analiza sygnału")
+plt.subplot(3,3,1)
+plt.plot(signal.t,signal.x)
+plt.grid()
+plt.subplot(3,3,2)
+plt.plot(signal.t,signal.y)
+plt.grid()
+plt.subplot(3,3,3)
+plt.plot(signal.t,signal.z)
+plt.grid()
+plt.subplot(3,3,4)
+plt.plot(xfreq,xmag)
+plt.grid()
+plt.subplot(3,3,5)
+plt.plot(yfreq,ymag)
+plt.grid()
+plt.subplot(3,3,6)
+plt.plot(zfreq,zmag)
+plt.grid()
+plt.subplot(3,3,7)
+plt.plot(xfreq,xnorm)
+plt.grid()
+plt.subplot(3,3,8)
+plt.plot(yfreq,ynorm)
+plt.grid()
+plt.subplot(3,3,9)
+plt.plot(zfreq,znorm)
+plt.grid()
 
 
 
+features2 = load_features('res/features.csv')
 
-# features, labels = load_data('res/data/')
-# save_features(features)
+# plot_axis_features_from_file('x',features2)
+# plot_axis_features_from_file('y',features2)
+# plot_axis_features_from_file('z',features2)
+plt.show()
 
-
-
-# features2 = load_features('res/features.csv')
-# labels = features.columns.tolist()
-# features = features.to_numpy()
-# print(features2)
-
-# plot_axis_features('x',features,labels)
-#plot_axis_features_from_file('x',features2)
-
-#print(xFeatures)
-# print("Features =================================")
-#print(features)
-# print("Labels =================================")
-#print(labels)
-
-# xFeatures = plot_axis_features('x', features, labels)
-print("")
 
