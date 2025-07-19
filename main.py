@@ -10,12 +10,14 @@ from scipy.signal import butter,filtfilt
 from scipy.stats import skew, kurtosis
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import classification_report
 from datetime import datetime
 from scipy import stats
 import pickle
 import json
+
+from sklearn.svm import SVC
 from tqdm import tqdm
 
 model = None
@@ -27,25 +29,27 @@ def load_file(filename):
     try:
         file = pn.read_csv(filename, header=None, names=["t", "x", "y", "z"])
 
-        return file.sort_values('t')
+        return file
     except Exception as e:
         print(f'Error Loading {filename}: {e}')
         return None
 
 def load_features(filename):
         try:
-            file = pn.read_csv(filename, header=None, names= ['mean_x', 'std_x', 'rms_x', 'p2p_x', 'if_x', 'skewness_x', 'kurtosis_x', 'crest_factor_x', 'shape_factor_x',
-                                'mean_y', 'std_y', 'rms_y', 'p2p_y', 'if_y', 'skewness_y', 'kurtosis_y', 'crest_factor_y', 'shape_factor_y',
-                                'mean_z', 'std_z', 'rms_z', 'p2p_z', 'if_z', 'skewness_z', 'kurtosis_z', 'crest_factor_z', 'shape_factor_z'])
-            required_columns = ['mean_x', 'std_x', 'rms_x', 'p2p_x', 'if_x', 'skewness_x', 'kurtosis_x', 'crest_factor_x', 'shape_factor_x',
-                                'mean_y', 'std_y', 'rms_y', 'p2p_y', 'if_y', 'skewness_y', 'kurtosis_y', 'crest_factor_y', 'shape_factor_y',
-                                'mean_z', 'std_z', 'rms_z', 'p2p_z', 'if_z', 'skewness_z', 'kurtosis_z', 'crest_factor_z', 'shape_factor_z']
+            column_names = ['mean_x', 'std_x', 'rms_x', 'p2p_x', 'if_x', 'skewness_x', 'kurtosis_x',
+                                'crest_factor_x', 'shape_factor_x',
+                                'mean_y', 'std_y', 'rms_y', 'p2p_y', 'if_y', 'skewness_y', 'kurtosis_y',
+                                'crest_factor_y', 'shape_factor_y',
+                                'mean_z', 'std_z', 'rms_z', 'p2p_z', 'if_z', 'skewness_z', 'kurtosis_z',
+                                'crest_factor_z', 'shape_factor_z']
+            file = pn.read_csv(filename, header=None, names= column_names)
 
-            if not all(col in file.columns for col in required_columns):
-                print(f"Error: CSV must contain columns: {required_columns}")
+
+            if not all(col in file.columns for col in column_names):
+                print(f"Error: CSV must contain columns: {column_names}")
                 return None
 
-            return file.sort_values('mean_x')
+            return file
         except Exception as e:
             print(f'Error Loading {filename}: {e}')
             return None
@@ -65,7 +69,6 @@ def get_folder_name(folderName):
 
 def load_data(folderPath):
     allFiles = []
-
     failedFile = []
     featureList = []
     labels = []
@@ -81,7 +84,6 @@ def load_data(folderPath):
                 allFiles.append((filePath, subfolder))
 
     #Process
-
     for filePath, folderName in tqdm(allFiles, desc="Processing files"):
         try:
             # Load signal data
@@ -103,7 +105,6 @@ def load_data(folderPath):
             failedFile.append(filePath)
 
     save_features(featureList)
-
     return featureList, labels
 
 def signal_FFT(data):
@@ -135,6 +136,7 @@ def signal_normalization(data):
     #return (data - np.min(data)) / (np.max(data) - np.min(data))
     #return (data - np.mean(data)) / np.std(data)
     return data / np.max(data)
+
 def signal_average(data):
     return np.mean(data)
 
@@ -192,7 +194,7 @@ def process_signal(data):
 def save_features(data):
     df = pd.DataFrame(data).to_csv('res/features.csv', index=None, header=None)
 
-def moving_average(data, window_size=5):
+def moving_average(data, window_size=15):
     window = np.ones(window_size) / window_size
     return np.convolve(data, window, mode='same')
 
@@ -301,6 +303,13 @@ def train_model(X,y, modelType='random_forest'):
 
     global model, training_metadata
 
+    print(f"Training {modelType} model.")
+
+    # Split data for training and testing
+    XTrain, XTest, yTrain, yTest = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
     if modelType == 'random_forest':
         model = RandomForestClassifier(
             n_estimators=100,  # Number of trees
@@ -308,17 +317,32 @@ def train_model(X,y, modelType='random_forest'):
             random_state=42,  # For reproducible results
             class_weight='balanced'  # Handle unbalanced classes
         )
+        model.fit(XTrain, yTrain)
+    elif modelType == 'svm':
+        param_grid ={
+            'C': [0.1, 1, 10, 100],
+            'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
+            'kernel': ['rbf', 'poly', 'sigmoid']
+        }
+        svm_base = SVC(random_state=42, class_weight='balanced', probability=True)
+
+        print("Performing grid search for optimal SVM parameters...")
+        grid_search = GridSearchCV(
+            svm_base,
+            param_grid,
+            cv=5,
+            scoring='f1_macro',
+            n_jobs=-1,
+            verbose=1
+        )
+        grid_search.fit(XTrain, yTrain)
+        model = grid_search.best_estimator_
+
+        print(f"Best SVM parameters: {grid_search.best_params_}")
+        print(f"Best cross-validation score: {grid_search.best_score_:.3f}")
+
     else:
-        raise ValueError("Only 'random_forest' supported in simplified version")
-
-    # Split data for training and testing
-    XTrain, XTest, yTrain, yTest = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
-
-    # Train the model
-    print("Training model...")
-    model.fit(XTrain, yTrain)
+        raise ValueError("Supported models: 'random_forest', 'svm'")
 
     # Test the model
     yPred = model.predict(XTest)
@@ -335,17 +359,59 @@ def train_model(X,y, modelType='random_forest'):
                                                        output_dict=True)
     }
 
+    if modelType == 'svm':
+        training_metadata['best_params'] = grid_search.best_params_
+        training_metadata['best_cv_score'] = grid_search.best_score_
+
     print("Model Performance:")
     print(classification_report(yTest, yPred,
                                 target_names=['normal', 'unbalance', 'misalignment', 'bearing']))
 
     return model
 
+def generate_unique_filename(base_path, extension):
+    """Generate a unique filename by adding a counter if file exists"""
+    if not os.path.exists(base_path + extension):
+        return base_path + extension
+
+    counter = 1
+    while True:
+        new_path = f"{base_path}_{counter:02d}{extension}"
+        if not os.path.exists(new_path):
+            return new_path
+        counter += 1
+
+
 def save_model(filepath='trained_model.pkl', saveReadable=True):
     global model, scaler, feature_names, training_metadata
 
     if model is None:
         raise ValueError("No model to save. Train model first.")
+
+    # Ensure the filepath uses the res/model directory structure
+    if not filepath.startswith('res/model/'):
+        # If user provides a relative path like "RandomForest/test1.pkl"
+        if '/' in filepath:
+            filepath = os.path.join('res/model', filepath)
+        else:
+            # If just a filename, put it directly in res/model
+            filepath = os.path.join('res/model', filepath)
+
+    # Create directory structure if it doesn't exist
+    model_dir = os.path.dirname(filepath)
+    os.makedirs(model_dir, exist_ok=True)
+
+    # Generate unique filename if file already exists
+    original_filepath = filepath
+    counter = 1
+    while os.path.exists(filepath):
+        base_name = os.path.splitext(original_filepath)[0]
+        extension = os.path.splitext(original_filepath)[1]
+        filepath = f"{base_name}_{counter:03d}{extension}"
+        counter += 1
+
+    if filepath != original_filepath:
+        print(f"File {original_filepath} already exists. Saving as {filepath}")
 
     # Prepare model data for PKL
     model_data = {
@@ -363,7 +429,7 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
     if saveReadable:
         base_name = os.path.splitext(filepath)[0]
 
-        # 1. Save feature importance to CSV
+        # 1. Save feature importance to CSV (for Random Forest)
         if hasattr(model, 'feature_importances_'):
             feature_importance_df = pd.DataFrame({
                 'feature_name': feature_names,
@@ -371,11 +437,26 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
             }).sort_values('importance', ascending=False)
 
             importance_path = f"{base_name}_feature_importance.csv"
+            # Ensure unique filename for importance file too
+            counter = 1
+            original_importance_path = importance_path
+            while os.path.exists(importance_path):
+                base_importance = os.path.splitext(original_importance_path)[0]
+                importance_path = f"{base_importance}_{counter:03d}.csv"
+                counter += 1
+
             feature_importance_df.to_csv(importance_path, index=False)
             print(f"Feature importance saved to {importance_path}")
 
         # 2. Save model summary to text file
         summary_path = f"{base_name}_summary.txt"
+        # Ensure unique filename for summary file too
+        counter = 1
+        original_summary_path = summary_path
+        while os.path.exists(summary_path):
+            base_summary = os.path.splitext(original_summary_path)[0]
+            summary_path = f"{base_summary}_{counter:03d}.txt"
+            counter += 1
         with open(summary_path, 'w') as f:
             f.write("TOOL CONDITION MONITOR - MODEL SUMMARY\n")
             f.write("=" * 50 + "\n\n")
@@ -384,6 +465,14 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
             f.write(f"Training Samples: {training_metadata.get('training_samples', 'Unknown')}\n")
             f.write(f"Test Samples: {training_metadata.get('test_samples', 'Unknown')}\n")
             f.write(f"Feature Count: {training_metadata.get('feature_count', 'Unknown')}\n\n")
+
+            # Add SVM-specific info
+            if training_metadata.get('model_type') == 'svm':
+                f.write("SVM PARAMETERS:\n")
+                best_params = training_metadata.get('best_params', {})
+                for param, value in best_params.items():
+                    f.write(f"  {param}: {value}\n")
+                f.write(f"Best CV Score: {training_metadata.get('best_cv_score', 'Unknown'):.3f}\n\n")
 
             f.write("FEATURE NAMES:\n")
             for i, name in enumerate(feature_names, 1):
@@ -394,19 +483,34 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
                 report = training_metadata['classification_report']
                 f.write(f"Overall Accuracy: {report['accuracy']:.3f}\n\n")
 
-                for class_name in ['Good', 'Warning', 'Faulty']:
-                    class_key = class_name.lower()
-                    if class_key in report:
-                        f.write(f"{class_name}:\n")
-                        f.write(f"  Precision: {report[class_key]['precision']:.3f}\n")
-                        f.write(f"  Recall: {report[class_key]['recall']:.3f}\n")
-                        f.write(f"  F1-Score: {report[class_key]['f1-score']:.3f}\n")
-                        f.write(f"  Support: {report[class_key]['support']}\n\n")
+                for class_name in ['normal', 'unbalance', 'misalignment', 'bearing']:
+                    if class_name in report:
+                        f.write(f"{class_name.capitalize()}:\n")
+                        f.write(f"  Precision: {report[class_name]['precision']:.3f}\n")
+                        f.write(f"  Recall: {report[class_name]['recall']:.3f}\n")
+                        f.write(f"  F1-Score: {report[class_name]['f1-score']:.3f}\n")
+                        f.write(f"  Support: {report[class_name]['support']}\n\n")
 
         print(f"Model summary saved to {summary_path}")
 
-def load_model(filepath='trained_tool_monitor.pkl'):
+def load_model(filepath=None):
     global model, scaler, feature_names, training_metadata
+
+    if filepath is None:
+        models_dir = 'res/model'
+        if not os.path.exists(models_dir):
+            print(f"Models directory {models_dir} not found!")
+            return
+
+        pkl_files = [f for f in os.listdir(models_dir) if f.endswith('.pkl')]
+        if not pkl_files:
+            print(f"No .pkl files found in {models_dir}")
+            return
+
+        # Sort by modification time, get the most recent
+        pkl_files.sort(key=lambda x: os.path.getmtime(os.path.join(models_dir, x)), reverse=True)
+        filepath = os.path.join(models_dir, pkl_files[0])
+        print(f"Loading most recent model: {filepath}")
 
     try:
         with open(filepath, 'rb') as f:
@@ -418,6 +522,7 @@ def load_model(filepath='trained_tool_monitor.pkl'):
         training_metadata = model_data.get('training_metadata', {})
 
         print(f"Model loaded from {filepath}")
+        print(f"Model type: {training_metadata.get('model_type', 'Unknown')}")
         print(f"Trained on: {training_metadata.get('training_date', 'Unknown')}")
         print(f"Features: {len(feature_names)}")
 
@@ -479,22 +584,22 @@ def predict_condition(filepath):
         'condition': predicted_condition,
         'confidence': float(np.max(probabilities)),
         'probabilities': {
-            'good': float(probabilities[0]),
-            'warning': float(probabilities[1]),
-            'faulty': float(probabilities[2])
+            'normal': float(probabilities[0]),
+            'unbalance': float(probabilities[1]),
+            'misalignment': float(probabilities[2]),
+            'bearing': float(probabilities[3])
         },
         'recommendations': recommendations,
     }
 
-def init_prediction(filepath='trained_tool_monitor.pkl'):
+def init_prediction(filepath=None):
     load_model(filepath)
-
     print("Model loaded and ready for predictions!")
 
     # Return prediction function
     return predict_condition
 
-def init_training(folderPath):
+def init_training(folderPath, model_type='random_forest'):
     feature_list, labels = load_data(folderPath)
 
     if len(feature_list) == 0:
@@ -509,67 +614,71 @@ def init_training(folderPath):
 
     # Prepare and train
     X, y, feature_names = prepare_training_data(feature_list, labels)
-    train_model(X, y, 'random_forest')
+    train_model(X, y, model_type)
 
     # Save the model with readable files
-    save_model('trained_tool_monitor.pkl', saveReadable=True)
+    model_filename = f'{model_type}/tool_monitor_{model_type}.pkl'
+    saved_filepath = save_model(model_filename, saveReadable=True)
+    print(f"Training complete! Model saved in res/model/{model_filename}")
 
-    print("Training complete!")
+def test_print():
+    signal = load_file('res/balans_2.csv')
 
+    xfreq, xmag = signal_FFT(signal.x)
+    yfreq, ymag = signal_FFT(signal.y)
+    zfreq, zmag = signal_FFT(signal.z)
+
+    xnorm = signal_normalization(xmag)
+    ynorm = signal_normalization(ymag)
+    znorm = signal_normalization(zmag)
+
+    plt.figure("Analiza sygnału")
+    plt.subplot(3, 3, 1)
+    plt.plot(signal.t, signal.x)
+    plt.grid()
+    plt.subplot(3, 3, 2)
+    plt.plot(signal.t, signal.y)
+    plt.grid()
+    plt.subplot(3, 3, 3)
+    plt.plot(signal.t, signal.z)
+    plt.grid()
+    plt.subplot(3, 3, 4)
+    plt.plot(xfreq, xmag)
+    plt.grid()
+    plt.subplot(3, 3, 5)
+    plt.plot(yfreq, ymag)
+    plt.grid()
+    plt.subplot(3, 3, 6)
+    plt.plot(zfreq, zmag)
+    plt.grid()
+    plt.subplot(3, 3, 7)
+    plt.plot(xfreq, xnorm)
+    plt.grid()
+    plt.subplot(3, 3, 8)
+    plt.plot(yfreq, ynorm)
+    plt.grid()
+    plt.subplot(3, 3, 9)
+    plt.plot(zfreq, znorm)
+    plt.grid()
 # Main program
 
-#init_training('res/data')
+# init_training('res/data', 'svm')
 
-# predict = init_prediction('trained_tool_monitor.pkl')
-# result = predict('res/normalne11.csv')
-# print(result)
+predict = init_prediction('res/model/random_forest/tool_monitor_random_forest.pkl')
+result = predict('res/os_3.csv')
+print(result)
+print("=========================")
+predict = init_prediction('res/model/svm/tool_monitor_svm.pkl')
+result = predict('res/os_3.csv')
+print(result)
 
 #features, labels = load_data('res/data/')
 #save_features(features)
 
-signal = load_file('res/balans_2.csv')
+# test_print()
 
-xfreq, xmag = signal_FFT(signal.x)
-yfreq, ymag = signal_FFT(signal.y)
-zfreq, zmag = signal_FFT(signal.z)
-
-xnorm = signal_normalization(xmag)
-ynorm = signal_normalization(ymag)
-znorm = signal_normalization(zmag)
-
-plt.figure("Analiza sygnału")
-plt.subplot(3,3,1)
-plt.plot(signal.t,signal.x)
-plt.grid()
-plt.subplot(3,3,2)
-plt.plot(signal.t,signal.y)
-plt.grid()
-plt.subplot(3,3,3)
-plt.plot(signal.t,signal.z)
-plt.grid()
-plt.subplot(3,3,4)
-plt.plot(xfreq,xmag)
-plt.grid()
-plt.subplot(3,3,5)
-plt.plot(yfreq,ymag)
-plt.grid()
-plt.subplot(3,3,6)
-plt.plot(zfreq,zmag)
-plt.grid()
-plt.subplot(3,3,7)
-plt.plot(xfreq,xnorm)
-plt.grid()
-plt.subplot(3,3,8)
-plt.plot(yfreq,ynorm)
-plt.grid()
-plt.subplot(3,3,9)
-plt.plot(zfreq,znorm)
-plt.grid()
-
-
-
-features2 = load_features('res/features.csv')
-
+# features2 = load_features('res/features.csv')
+#
 # plot_axis_features_from_file('x',features2)
 # plot_axis_features_from_file('y',features2)
 # plot_axis_features_from_file('z',features2)
