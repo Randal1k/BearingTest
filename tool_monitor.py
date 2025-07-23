@@ -492,6 +492,7 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
                         f.write(f"  Support: {report[class_name]['support']}\n\n")
 
         print(f"Model summary saved to {summary_path}")
+    return filepath
 
 def load_model(filepath=None):
     global model, scaler, feature_names, training_metadata
@@ -619,7 +620,7 @@ def init_training(folderPath, model_type='random_forest'):
     # Save the model with readable files
     model_filename = f'{model_type}/tool_monitor_{model_type}.pkl'
     saved_filepath = save_model(model_filename, saveReadable=True)
-    print(f"Training complete! Model saved in res/model/{model_filename}")
+    print(f"Training complete! Model saved in res/model/{saved_filepath}")
 
 def test_print():
     signal = load_file('res/balans_2.csv')
@@ -660,20 +661,23 @@ def test_print():
     plt.subplot(3, 3, 9)
     plt.plot(zfreq, znorm)
     plt.grid()
+
+
 # Main program
 
-# init_training('res/data', 'svm')
+# init_training('res/data2')
+# init_training('res/data','svm')
 
-predict = init_prediction('res/model/random_forest/tool_monitor_random_forest.pkl')
-result = predict('res/os_3.csv')
-print(result)
-print("=========================")
-predict = init_prediction('res/model/svm/tool_monitor_svm.pkl')
-result = predict('res/os_3.csv')
-print(result)
+# predict = init_prediction('res/model/random_forest/tool_monitor_random_forest.pkl')
+# result = predict('res/lozysko_2.csv')
+# print(result)
+# print("=========================")
+# predict = init_prediction('res/model/svm/tool_monitor_svm.pkl')
+# result = predict('res/lozysko_2.csv')
+# print(result)
 
-#features, labels = load_data('res/data/')
-#save_features(features)
+# features, labels = load_data('res/data')
+# save_features(features)
 
 # test_print()
 
@@ -682,6 +686,7 @@ print(result)
 # plot_axis_features_from_file('x',features2)
 # plot_axis_features_from_file('y',features2)
 # plot_axis_features_from_file('z',features2)
-plt.show()
+#
+# plt.show()
 
 
