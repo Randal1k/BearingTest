@@ -13,9 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import classification_report
 from datetime import datetime
-from scipy import stats
 import pickle
-import json
+import time
 
 from sklearn.svm import SVC
 from tqdm import tqdm
@@ -66,6 +65,49 @@ def get_folder_name(folderName):
         return 'misalignment'
     else:
         return 'normal'
+
+def load_data_with_progress(folderPath, progress_callback=None):
+    allFiles = []
+    failedFile = []
+    featureList = []
+    labels = []
+
+    # Count files first
+    for subfolder in os.listdir(folderPath):
+        subfolderPath = os.path.join(folderPath, subfolder)
+        if os.path.isdir(subfolderPath):
+            csvFiles = [f for f in os.listdir(subfolderPath) if f.endswith('.csv')]
+            for filename in csvFiles:
+                filePath = os.path.join(subfolderPath, filename)
+                allFiles.append((filePath, subfolder))
+
+    total_files = len(allFiles)
+    start_time = time.time()
+
+    # Process with progress updates
+    for i, (filePath, folderName) in enumerate(allFiles):
+        try:
+            # Your existing processing code
+            signal = load_file(filePath)
+            if signal is None:
+                failedFile.append(filePath)
+                continue
+
+            features = process_signal(signal)
+            featureList.append(features)
+            label = get_folder_name(folderName)
+            labels.append(label)
+
+            # Update progress
+            if progress_callback:
+                elapsed = time.time() - start_time
+                progress_callback(i + 1, total_files, elapsed)
+
+        except Exception as e:
+            print(f"Error processing {filePath}: {e}")
+            failedFile.append(filePath)
+
+    return featureList, labels
 
 def load_data(folderPath):
     allFiles = []

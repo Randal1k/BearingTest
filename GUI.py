@@ -10,6 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import pandas as pd
 import numpy as np
+import time
 
 import tool_monitor as tm
 from tool_monitor import (
@@ -33,19 +34,25 @@ selected_model = None
 training_folder = None
 test_file = None
 viz_file = None
-progress = None
-status_label = None
-results_text = None
-fig = None
-canvas = None
+is_running = False
+predict_function = None
+
+current_file = 0
+total_files = 0
+start_time = None
+
+learning_frame = None
+testing_frame = None
 train_button = None
 load_model_button = None
 test_button = None
 model_combo = None
-learning_frame = None
-testing_frame = None
-is_running = False
-predict_function = None
+progress_bar = None
+progress_detail_label = None
+status_label = None
+results_text = None
+fig = None
+canvas = None
 
 
 def create_main_window():
@@ -63,7 +70,7 @@ def create_main_window():
     initialize_variables()
     create_widgets()
     refresh_available_models()
-
+    on_mode_change()
 
 def initialize_variables():
     """Initialize all global variables"""
@@ -95,7 +102,8 @@ def create_widgets():
 
 def create_main_tab():
     """Create the main tab with learning and testing modes"""
-    global learning_frame, testing_frame, train_button, load_model_button, test_button, model_combo, progress, status_label
+    global learning_frame, testing_frame, train_button, load_model_button
+    global test_button, model_combo, progress_bar, progress_detail_label, status_label
 
     # Main tab
     main_frame = ttk.Frame(notebook)
@@ -164,19 +172,21 @@ def create_main_tab():
                              command=run_test)
     test_button.pack(side=tk.LEFT, padx=5)
 
-    # Progress bar
-    progress_frame = ttk.Frame(main_frame)
+    # Progress section
+    progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="10")
     progress_frame.pack(fill=tk.X, padx=10, pady=5)
 
-    progress = ttk.Progressbar(progress_frame, mode='indeterminate')
-    progress.pack(fill=tk.X)
+    # Progress bar (determinate for file processing)
+    progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
+    progress_bar.pack(fill=tk.X, pady=(0, 5))
+
+    # Progress details label (using monospace font for alignment)
+    progress_detail_label = ttk.Label(progress_frame, text="", font=('Courier', 9))
+    progress_detail_label.pack(fill=tk.X)
 
     # Status label
     status_label = ttk.Label(main_frame, text="Ready")
     status_label.pack(pady=5)
-
-    # Set initial mode
-    on_mode_change()
 
 
 def create_visualization_tab():
@@ -275,6 +285,97 @@ def refresh_available_models():
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
 
+def count_csv_files(folder_path):
+    """Count total CSV files in all subfolders"""
+    total = 0
+    try:
+        for subfolder in os.listdir(folder_path):
+            subfolder_path = os.path.join(folder_path, subfolder)
+            if os.path.isdir(subfolder_path):
+                csv_files = [f for f in os.listdir(subfolder_path) if f.endswith('.csv')]
+                total += len(csv_files)
+    except Exception as e:
+        log_message(f"Error counting files: {str(e)}")
+    return total
+
+def format_time(seconds):
+    """Format time in MM:SS format"""
+    if seconds < 0:
+        return "00:00"
+    minutes = int(seconds // 60)
+    seconds = int(seconds % 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def update_progress(current, total, elapsed_time=None):
+    """
+    Update progress bar and details
+
+    DETAILED EXPLANATION OF PROGRESS BAR:
+
+    1. THREAD SAFETY: This function can be called from worker threads, but GUI updates
+       must happen in the main thread. We use root.after(0, _update) to schedule
+       the actual GUI update in the main thread.
+
+    2. PROGRESS CALCULATION:
+       - percentage = (current / total) * 100  # Calculate completion percentage
+       - progress_bar['value'] = percentage    # Update the visual progress bar
+
+    3. VISUAL PROGRESS BAR:
+       - Uses Unicode block characters (█) to create a visual bar
+       - int(percentage/10) determines how many blocks to show (0-10 blocks)
+       - Remaining spaces are filled with '  ' (two spaces per missing block)
+
+    4. TIMING CALCULATIONS:
+       - speed = current / elapsed_time        # Files processed per second
+       - remaining_files = total - current     # How many files left
+       - eta = remaining_files / speed         # Estimated time to completion
+
+    5. FORMAT STRING:
+       Processing files:  61%|██████    | 2444/4000 [02:48<01:58, 13.18it/s]
+
+       Parts breakdown:
+       - "Processing files:" - Static label
+       - "61%" - Current percentage
+       - "|██████    |" - Visual progress bar (6 blocks filled, 4 empty)
+       - "2444/4000" - Current file / Total files
+       - "[02:48<01:58" - [elapsed_time<estimated_remaining_time]
+       - "13.18it/s]" - Processing speed (iterations/files per second)
+    """
+
+    def _update():
+        if total > 0:
+            # Calculate percentage and update progress bar
+            percentage = (current / total) * 100
+            progress_bar['value'] = percentage
+
+            # Calculate timing and speed information
+            if elapsed_time and elapsed_time > 0:
+                speed = current / elapsed_time  # Files per second
+                remaining_files = total - current
+                eta = remaining_files / speed if speed > 0 else 0
+
+                # Create visual progress bar using Unicode blocks
+                filled_blocks = int(percentage / 10)  # 0-10 blocks
+                empty_blocks = 10 - filled_blocks
+                visual_bar = '█' * filled_blocks + '  ' * empty_blocks
+
+                # Format the complete progress string (similar to tqdm)
+                progress_text = (f"Processing files: {percentage:3.0f}%|{visual_bar}| "
+                                 f"{current}/{total} [{format_time(elapsed_time)}<"
+                                 f"{format_time(eta)}, {speed:.2f}it/s]")
+            else:
+                # Simplified version without timing
+                filled_blocks = int(percentage / 10)
+                empty_blocks = 10 - filled_blocks
+                visual_bar = '█' * filled_blocks + '  ' * empty_blocks
+                progress_text = f"Processing files: {percentage:3.0f}%|{visual_bar}| {current}/{total}"
+
+            # Update the progress detail label
+            progress_detail_label.config(text=progress_text)
+
+    # Schedule the GUI update in the main thread (CRITICAL for thread safety)
+    root.after(0, _update)
 
 def start_training():
     """Start model training in a separate thread"""
@@ -295,13 +396,14 @@ def start_training():
     # Start training in separate thread
     is_running = True
     train_button.config(state='disabled')
-    progress.start(10)
+    progress_bar.config(mode='determinate')
+    progress_bar['value'] = 0
+    progress_detail_label.config(text="Initializing...")
     status_label.config(text="Training in progress...")
 
     thread = threading.Thread(target=training_worker)
     thread.daemon = True
     thread.start()
-
 
 def training_worker():
     """Worker function for training (runs in separate thread)"""
@@ -310,12 +412,25 @@ def training_worker():
         log_message(f"Training folder: {training_folder.get()}")
         log_message(f"Model type: {model_type.get()}")
 
+        total_files = count_csv_files(training_folder.get())
+        start_time = time.time()
+
         # Replace with your actual training function call
-        tm.init_training(training_folder.get(),model_type.get())
+        feature_list, labels = tm.load_data_with_progress(
+            training_folder.get(),
+            update_progress  # Pass the progress callback
+        )
+        X, y, feature_names = tm.prepare_training_data(feature_list, labels)
+        tm.train_model(X, y, model_type.get())
+        tm.save_model(f'{model_type.get()}/tool_monitor_{model_type.get()}.pkl', True)
 
         # Simulate training time
-        import time
-        time.sleep(3)
+        for i in range(total_files + 1):
+            if not is_running:  # Allow cancellation
+                break
+            elapsed = time.time() - start_time
+            update_progress(i, total_files, elapsed)
+            time.sleep(0.01)  # Simulate file processing time
 
         log_message("Training completed successfully!")
 
@@ -326,14 +441,14 @@ def training_worker():
         # Update UI in main thread
         root.after(0, training_finished)
 
-
 def training_finished():
     """Called when training is finished"""
     global is_running
 
     is_running = False
     train_button.config(state='normal')
-    progress.stop()
+    progress_bar['value'] = 100
+    progress_detail_label.config(text="Training completed")
     status_label.config(text="Training completed")
     refresh_available_models()
 
