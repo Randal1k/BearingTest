@@ -293,13 +293,11 @@ def plot_axis_features(axis, featureList, labels):
 
     return axis_features
 
-def plot_axis_features_from_file(axis,feature):
-    plotsNames = ['mean', 'std', 'rms', 'p2p', 'if', 'skewness', 'kurtosis', 'crest_factor', 'shape_factor']
+def plot_axis_features_from_file(fig, axis, feature, segment_size):
 
+    plotsNames = ['mean', 'std', 'rms', 'p2p', 'if', 'skewness', 'kurtosis', 'crest_factor', 'shape_factor']
     column_names = [f'{name}_{axis}' for name in plotsNames]
     data = feature[column_names]
-
-    segment_size = 1000
 
     segments = {
         'Bearing': data.iloc[0:segment_size],
@@ -308,23 +306,26 @@ def plot_axis_features_from_file(axis,feature):
         'Misalignment': data.iloc[3 * segment_size:4 * segment_size],
     }
 
-    fig, axes = plt.subplots(3, 3, figsize=(14, 9))
-    axes = axes.ravel()
+    fig.subplots_adjust(hspace=0.4)
+    axes = fig.subplots(3, 3).ravel()
 
-    for i, feature in enumerate(column_names):
+    for i, feature_name in enumerate(column_names):
         ax = axes[i]
         x_vals = np.arange(segment_size)
 
         for label, segment in segments.items():
-            smoothed = moving_average(segment[feature].values)
+            values = segment[feature_name].values
+            if len(values) == 0:
+                continue
+            smoothed = moving_average(values)
             ax.plot(x_vals, smoothed, label=label)
 
-        ax.set_title(feature.replace(f"_{axis}", "").capitalize())
+        ax.set_title(feature_name.replace(f"_{axis}", "").capitalize())
         ax.grid(True)
 
-    axes[0].legend(loc='upper right', fontsize='small')
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=4, fontsize='small', bbox_to_anchor=(0.5, 0))
     fig.suptitle(f'Porównanie cech dla osi {axis.upper()}', fontsize=16)
-    plt.tight_layout(rect=[0, 0, 1, 0.97])
 
 def prepare_training_data(features, labels):
     global scaler, feature_names
@@ -725,7 +726,7 @@ def test_print():
 
 # features2 = load_features('res/features.csv')
 #
-# plot_axis_features_from_file('x',features2)
+# plot_axis_features_from_file('x',features2,'res/features.csv')
 # plot_axis_features_from_file('y',features2)
 # plot_axis_features_from_file('z',features2)
 #

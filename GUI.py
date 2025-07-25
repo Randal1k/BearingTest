@@ -3,26 +3,14 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 
 import threading
 import os
-import sys
-from pathlib import Path
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import pandas as pd
 import numpy as np
-import time
 
 import tool_monitor as tm
-from tool_monitor import (
-    init_training,
-    init_prediction,
-    load_file,
-    signal_FFT,
-    process_signal,
-    load_model,
-    predict_condition,
-    save_model
-)
 
 # Global Vars
 
@@ -34,6 +22,7 @@ selected_model = None
 training_folder = None
 test_file = None
 viz_file = None
+custom_model_name = None
 is_running = False
 predict_function = None
 
@@ -55,6 +44,7 @@ fig = None
 canvas = None
 
 
+
 def create_main_window():
     """Create and configure the main window"""
     global root
@@ -74,7 +64,7 @@ def create_main_window():
 
 def initialize_variables():
     """Initialize all global variables"""
-    global current_mode, model_type, selected_model, training_folder, test_file, viz_file, is_running, predict_function
+    global current_mode, model_type, selected_model, training_folder, test_file, viz_file, is_running, predict_function, custom_model_name
 
     current_mode = tk.StringVar(value="learning")
     model_type = tk.StringVar(value="random_forest")
@@ -82,9 +72,8 @@ def initialize_variables():
     training_folder = tk.StringVar()
     test_file = tk.StringVar()
     viz_file = tk.StringVar()
-    is_running = False
-    predict_function = None
-
+    custom_model_name = tk.StringVar()
+    global progress_frame, status_frame
 
 def create_widgets():
     """Create all GUI widgets"""
@@ -95,17 +84,232 @@ def create_widgets():
     notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     # Create tabs
+    create_guide_tab()
     create_main_tab()
     create_visualization_tab()
     create_results_tab()
+
+
+def create_guide_tab():
+    """Create the user guide tab"""
+    # Guide tab
+    guide_frame = ttk.Frame(notebook)
+    notebook.add(guide_frame, text="📖 User Guide")
+
+    # Create scrollable text widget for the guide
+    guide_text = scrolledtext.ScrolledText(guide_frame, wrap=tk.WORD,
+                                           height=25, width=80, font=('TkDefaultFont', 10))
+    guide_text.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+    # Insert the comprehensive user guide
+    guide_content = """
+🔧 TOOL CONDITION MONITOR - USER GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 OVERVIEW
+This application allows you to train machine learning models to classify tool conditions
+and test them on new data. It supports Random Forest and SVM algorithms for detecting:
+• Normal condition
+• Unbalance issues  
+• Misalignment problems
+• Bearing faults
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎓 LEARNING MODE - Training New Models
+═══════════════════════════════════════════════════════════════════════════════
+
+1️⃣ SELECT MODEL TYPE
+   • Random Forest: Fast training, good performance, easier to interpret
+   • SVM: More complex, potentially higher accuracy, longer training time
+
+2️⃣ PREPARE YOUR DATA
+   Your training data should be organized in folders like this:
+
+   📁 training_data/
+   ├── 📁 normal/
+   │   ├── normal_sample_001.csv
+   │   ├── normal_sample_002.csv
+   │   └── ...
+   ├── 📁 bearing/
+   │   ├── bearing_fault_001.csv
+   │   ├── bearing_fault_002.csv
+   │   └── ...
+   ├── 📁 unbalance/
+   │   ├── unbalance_001.csv
+   │   └── ...
+   └── 📁 misalignment/
+       ├── misalignment_001.csv
+       └── ...
+
+   📄 CSV FORMAT: Each file should contain 4 columns: t, x, y, z
+   • t: Time values
+   • x, y, z: Acceleration data for each axis
+
+3️⃣ BROWSE FOR TRAINING FOLDER
+   Click "Browse" and select your main training data folder
+
+4️⃣ ENTER MODEL NAME (Optional)
+   • Leave empty: Auto-generates name like "random_forest_2024_01_15_14_30"
+   • Custom name: Enter your preferred name (e.g., "motor_classifier_v1")
+
+5️⃣ START TRAINING
+   • Click "Start Training"
+   • Monitor progress with the detailed progress bar
+   • Check "Results" tab for training logs and performance metrics
+
+⚠️  TRAINING TIPS:
+   • Ensure balanced data (similar number of samples per condition)
+   • More data = better model performance
+   • Training time depends on data size and model type
+   • SVM training is slower but may give better results
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔍 TESTING MODE - Using Trained Models
+═══════════════════════════════════════════════════════════════════════════════
+
+1️⃣ SELECT MODEL
+   • Choose from dropdown list of available models
+   • Click "Refresh" to update the list after training new models
+
+2️⃣ LOAD MODEL
+   • Click "Load Model" to initialize the selected model
+   • Wait for "Model loaded successfully" message
+
+3️⃣ SELECT TEST FILE
+   • Click "Browse" to choose a CSV file for testing
+   • File format: same as training data (t, x, y, z columns)
+
+4️⃣ RUN TEST
+   • Click "Run Test" to classify the condition
+   • Results appear in the "Results" tab with:
+     * Predicted condition
+     * Confidence percentage
+     * Probability breakdown for all conditions
+     * Maintenance recommendations
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 SIGNAL VISUALIZATION
+═══════════════════════════════════════════════════════════════════════════════
+
+This tab allows you to visualize vibration signals:
+
+1️⃣ SELECT SIGNAL FILE
+   • Browse for any CSV file with vibration data
+
+2️⃣ PLOT SIGNAL
+   • View time-domain signals for X, Y, Z axes
+   • See frequency-domain (FFT) analysis
+   • Identify patterns and anomalies visually
+
+💡 VISUALIZATION TIPS:
+   • Normal signals: Smooth, regular patterns
+   • Bearing faults: High-frequency noise, spikes
+   • Unbalance: Strong fundamental frequency peaks
+   • Misalignment: Harmonic patterns
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📈 RESULTS TAB
+═══════════════════════════════════════════════════════════════════════════════
+
+This tab shows:
+• Training progress and logs
+• Model performance metrics
+• Test results with detailed breakdowns
+• Timestamped activity log
+• Clear button to reset the log
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🛠️ TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ "Training data folder does not exist"
+   → Check the folder path and ensure it exists
+
+❌ "No data processed"
+   → Verify CSV files are in subfolders (normal/, bearing/, etc.)
+   → Check CSV format (must have t, x, y, z columns)
+
+❌ "Model file not found"
+   → Click "Refresh" in testing mode
+   → Check if training completed successfully
+
+❌ Progress bar not updating
+   → Large datasets take time - be patient
+   → Check Results tab for detailed logs
+
+❌ Low model accuracy
+   → Increase training data size
+   → Ensure data quality and proper labeling
+   → Try different model types
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📁 FILE LOCATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Trained models are saved in: res/model/
+• Random Forest models: res/model/random_forest/
+• SVM models: res/model/svm/
+• Custom named models: res/model/[your_custom_name]/
+
+Additional files created:
+• Feature importance: [model_name]_feature_importance.csv
+• Model summary: [model_name]_summary.txt
+• Training logs: Available in Results tab
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ DATA COLLECTION:
+   • Use consistent sampling rates
+   • Collect data under similar operating conditions
+   • Include multiple examples of each fault type
+   • Record normal operation data regularly
+
+✅ MODEL TRAINING:
+   • Start with Random Forest for quick results
+   • Use descriptive model names for easy identification
+   • Monitor training progress and logs
+   • Save multiple model versions for comparison
+
+✅ TESTING:
+   • Test on data from different time periods
+   • Verify results with known fault conditions
+   • Use confidence scores to assess reliability
+   • Regular model retraining with new data
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📞 SUPPORT
+═══════════════════════════════════════════════════════════════════════════════
+
+For technical support or questions:
+• Check the Results tab for detailed error messages
+• Ensure all dependencies are installed
+• Verify data format and folder structure
+• Monitor system resources during training
+
+═══════════════════════════════════════════════════════════════════════════════
+"""
+
+    guide_text.insert(1.0, guide_content)
+    guide_text.config(state='disabled')  # Make it read-only
 
 
 def create_main_tab():
     """Create the main tab with learning and testing modes"""
     global learning_frame, testing_frame, train_button, load_model_button
     global test_button, model_combo, progress_bar, progress_detail_label, status_label
+    global progress_frame, status_frame
 
-    # Main tab
+    # Main tab frame
     main_frame = ttk.Frame(notebook)
     notebook.add(main_frame, text="Main")
 
@@ -137,10 +341,17 @@ def create_main_tab():
     ttk.Button(learning_frame, text="Browse",
                command=browse_training_folder).grid(row=1, column=2, padx=5, pady=2)
 
+    # Custom model name
+    ttk.Label(learning_frame, text="Model Name (optional):").grid(row=2, column=0, sticky=tk.W, pady=2)
+    custom_name_entry = ttk.Entry(learning_frame, textvariable=custom_model_name, width=40)
+    custom_name_entry.grid(row=2, column=1, sticky=tk.W, padx=10, pady=2)
+    ttk.Label(learning_frame, text="Leave empty for auto-naming", font=('TkDefaultFont', 8),
+              foreground='gray').grid(row=2, column=2, sticky=tk.W, padx=5, pady=2)
+
     # Start training button
     train_button = ttk.Button(learning_frame, text="Start Training",
                               command=start_training)
-    train_button.grid(row=2, column=0, columnspan=3, pady=10)
+    train_button.grid(row=3, column=0, columnspan=3, pady=10)
 
     # Testing mode frame
     testing_frame = ttk.LabelFrame(main_frame, text="Testing Configuration", padding="10")
@@ -164,33 +375,36 @@ def create_main_tab():
     button_frame = ttk.Frame(testing_frame)
     button_frame.grid(row=2, column=0, columnspan=3, pady=10)
 
-    load_model_button = ttk.Button(button_frame, text="Load Model",
-                                   command=load_model)
+    load_model_button = ttk.Button(button_frame, text="Load Model", command=load_model)
     load_model_button.pack(side=tk.LEFT, padx=5)
 
-    test_button = ttk.Button(button_frame, text="Run Test",
-                             command=run_test)
+    test_button = ttk.Button(button_frame, text="Run Test", command=run_test)
     test_button.pack(side=tk.LEFT, padx=5)
 
-    # Progress section
+    # Progress section - Fixed position to prevent jumping
     progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="10")
     progress_frame.pack(fill=tk.X, padx=10, pady=5)
+    progress_frame.pack_propagate(False)  # Prevent size changes
+    progress_frame.config(height=100)  # Fixed height
 
     # Progress bar (determinate for file processing)
     progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
     progress_bar.pack(fill=tk.X, pady=(0, 5))
 
     # Progress details label (using monospace font for alignment)
-    progress_detail_label = ttk.Label(progress_frame, text="", font=('Courier', 9))
+    progress_detail_label = ttk.Label(progress_frame, text="Ready to start training...",
+                                      font=('Courier', 9))
     progress_detail_label.pack(fill=tk.X)
 
-    # Status label
-    status_label = ttk.Label(main_frame, text="Ready")
-    status_label.pack(pady=5)
+    # Status label - Fixed position
+    status_frame = ttk.Frame(main_frame)
+    status_frame.pack(fill=tk.X, padx=10, pady=2)
+    status_label = ttk.Label(status_frame, text="Ready")
+    status_label.pack()
 
 
 def create_visualization_tab():
-    """Create the visualization tab"""
+    """Create the visualization tab for signal plotting"""
     global fig, canvas
 
     # Visualization tab
@@ -206,13 +420,14 @@ def create_visualization_tab():
     ttk.Button(file_frame, text="Plot Signal", command=plot_signal).pack(side=tk.LEFT, padx=5)
 
     # Matplotlib canvas
+    global fig, canvas
     fig = Figure(figsize=(10, 8))
     canvas = FigureCanvasTkAgg(fig, viz_frame)
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
 
 def create_results_tab():
-    """Create the results tab"""
+    """Create the results tab for displaying outputs"""
     global results_text
 
     # Results tab
@@ -226,22 +441,30 @@ def create_results_tab():
 
     # Clear button
     ttk.Button(results_frame, text="Clear Results",
-               command=clear_results).pack(pady=5)
+               command=lambda: results_text.delete(1.0, tk.END)).pack(pady=5)
+
 
 def on_mode_change():
     """Handle mode change between learning and testing"""
+    learning_frame.pack_forget()
+    testing_frame.pack_forget()
+
     if current_mode.get() == "learning":
         learning_frame.pack(fill=tk.X, padx=10, pady=5)
-        testing_frame.pack_forget()
     else:
         testing_frame.pack(fill=tk.X, padx=10, pady=5)
-        learning_frame.pack_forget()
+
+        # Zawsze pakuj te ramki na końcu (żeby nie przeskakiwały)
+    progress_frame.pack(fill=tk.X, padx=10, pady=5)
+    status_frame.pack(fill=tk.X, padx=10, pady=2)
+
 
 def browse_training_folder():
     """Browse for training data folder"""
     folder = filedialog.askdirectory(title="Select Training Data Folder")
     if folder:
         training_folder.set(folder)
+
 
 def browse_test_file():
     """Browse for test data file"""
@@ -251,6 +474,7 @@ def browse_test_file():
     )
     if file:
         test_file.set(file)
+
 
 def browse_viz_file():
     """Browse for visualization file"""
@@ -265,10 +489,6 @@ def browse_viz_file():
 def refresh_available_models():
     """Refresh the list of available models"""
     try:
-        # This would call your list_available_models() function
-        # models = tm.list_available_models()
-
-        # For demo purposes, add some example models
         models = []
         model_dir = 'res/model'
         if os.path.exists(model_dir):
@@ -278,12 +498,14 @@ def refresh_available_models():
                         relative_path = os.path.relpath(os.path.join(root_dir, file), model_dir)
                         models.append(relative_path)
 
-        model_combo['values'] = models
-        if models and not selected_model.get():
-            selected_model.set(models[0])
+        if model_combo:
+            model_combo['values'] = models
+            if models and not selected_model.get():
+                selected_model.set(models[0])
 
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
+
 
 def count_csv_files(folder_path):
     """Count total CSV files in all subfolders"""
@@ -297,6 +519,7 @@ def count_csv_files(folder_path):
     except Exception as e:
         log_message(f"Error counting files: {str(e)}")
     return total
+
 
 def format_time(seconds):
     """Format time in MM:SS format"""
@@ -412,8 +635,25 @@ def training_worker():
         log_message(f"Training folder: {training_folder.get()}")
         log_message(f"Model type: {model_type.get()}")
 
+        # Generate model filename
+        if custom_model_name.get().strip():
+            # Use custom name but keep it in the model type folder
+            custom_name = custom_model_name.get().strip()
+            # Remove .pkl extension if user added it
+            if custom_name.endswith('.pkl'):
+                custom_name = custom_name[:-4]
+            model_filename = f"{model_type.get()}/{custom_name}.pkl"
+            log_message(f"Using custom model name: {custom_name}.pkl in {model_type.get()}/ folder")
+        else:
+            # Auto-generate name with timestamp
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
+            model_filename = f"{model_type.get()}/tool_monitor_{model_type.get()}_{timestamp}.pkl"
+            log_message(f"Auto-generated model name: tool_monitor_{model_type.get()}_{timestamp}.pkl")
+
+        # Count total files for progress tracking
         total_files = count_csv_files(training_folder.get())
-        start_time = time.time()
+        log_message(f"Found {total_files} files to process")
 
         # Replace with your actual training function call
         feature_list, labels = tm.load_data_with_progress(
@@ -422,17 +662,10 @@ def training_worker():
         )
         X, y, feature_names = tm.prepare_training_data(feature_list, labels)
         tm.train_model(X, y, model_type.get())
-        tm.save_model(f'{model_type.get()}/tool_monitor_{model_type.get()}.pkl', True)
-
-        # Simulate training time
-        for i in range(total_files + 1):
-            if not is_running:  # Allow cancellation
-                break
-            elapsed = time.time() - start_time
-            update_progress(i, total_files, elapsed)
-            time.sleep(0.01)  # Simulate file processing time
+        tm.save_model(model_filename, True)
 
         log_message("Training completed successfully!")
+        log_message(f"Model saved as: {model_filename}")
 
     except Exception as e:
         log_message(f"Training error: {str(e)}")
@@ -498,9 +731,6 @@ def run_test():
 
         result = predict_function(test_file.get())
 
-        # Replace with your actual prediction function call
-        # result = tm.predict_condition(test_file.get())
-
         display_test_results(result)
         status_label.config(text="Test completed")
 
@@ -540,72 +770,39 @@ RECOMMENDATIONS:
 
 
 def plot_signal():
-    """Plot signal visualization"""
+    """Plot only 3x3 feature comparison plots"""
     if not viz_file.get():
-        messagebox.showerror("Error", "Please select a signal file")
+        messagebox.showerror("Error", "Please select a feature file")
         return
 
     if not os.path.exists(viz_file.get()):
-        messagebox.showerror("Error", "Signal file does not exist")
+        messagebox.showerror("Error", "Feature file does not exist")
         return
 
     try:
-        # Clear previous plots
         fig.clear()
 
-        # Replace with your actual signal loading and processing
-        # data = tm.load_file(viz_file.get())
+        # === WCZYTAJ CECHY Z PLIKU ===
+        feature = tm.load_features(viz_file.get())
+        print(feature)
 
-        # Simulate loading data
-        data = pd.DataFrame({
-            't': np.linspace(0, 1, 1000),
-            'x': np.sin(2 * np.pi * 10 * np.linspace(0, 1, 1000)) + 0.1 * np.random.randn(1000),
-            'y': np.sin(2 * np.pi * 15 * np.linspace(0, 1, 1000)) + 0.1 * np.random.randn(1000),
-            'z': np.sin(2 * np.pi * 8 * np.linspace(0, 1, 1000)) + 0.1 * np.random.randn(1000)
-        })
+        # Sprawdź czy liczba wierszy dzieli się na 4 klasy
+        total_rows = feature.shape[0]
+        if total_rows % 4 != 0:
+            messagebox.showerror("Error", "Feature file does not have rows divisible by 4.")
+            return
 
-        # Create subplots
-        ax1 = fig.add_subplot(3, 2, 1)
-        ax2 = fig.add_subplot(3, 2, 2)
-        ax3 = fig.add_subplot(3, 2, 3)
-        ax4 = fig.add_subplot(3, 2, 4)
-        ax5 = fig.add_subplot(3, 2, 5)
-        ax6 = fig.add_subplot(3, 2, 6)
+        segment_size = total_rows // 4  # np. 400/4 = 100
 
-        # Time domain plots
-        ax1.plot(data['t'], data['x'])
-        ax1.set_title('X-axis Signal')
-        ax1.set_xlabel('Time (s)')
-        ax1.set_ylabel('Amplitude')
+        # Rysuj wykresy cech tylko dla osi X
+        tm.plot_axis_features_from_file(fig,'x', feature, segment_size)
 
-        ax3.plot(data['t'], data['y'])
-        ax3.set_title('Y-axis Signal')
-        ax3.set_xlabel('Time (s)')
-        ax3.set_ylabel('Amplitude')
-
-        ax5.plot(data['t'], data['z'])
-        ax5.set_title('Z-axis Signal')
-        ax5.set_xlabel('Time (s)')
-        ax5.set_ylabel('Amplitude')
-
-        # FFT plots (simplified)
-        for i, (axis, ax) in enumerate([(data['x'], ax2), (data['y'], ax4), (data['z'], ax6)]):
-            fft_vals = np.fft.fft(axis)
-            freqs = np.fft.fftfreq(len(axis), 1 / 1000)
-            ax.plot(freqs[:len(freqs) // 2], np.abs(fft_vals)[:len(freqs) // 2])
-            ax.set_title(f'{"XYZ"[i]}-axis FFT')
-            ax.set_xlabel('Frequency (Hz)')
-            ax.set_ylabel('Magnitude')
-
-        fig.tight_layout()
+        fig.tight_layout(rect=[0, 0, 1, 0.97])
         canvas.draw()
-
-        # Switch to visualization tab
-        notebook.select(1)
+        notebook.select(2)
 
     except Exception as e:
-        messagebox.showerror("Error", f"Error plotting signal: {str(e)}")
-
+        messagebox.showerror("Error", f"Error plotting features: {str(e)}")
 
 def log_message(message):
     """Log message to results tab"""
