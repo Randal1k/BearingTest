@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+from ttkthemes import ThemedTk
+import customtkinter as ctk
 
 import threading
 import os
@@ -49,13 +51,21 @@ def create_main_window():
     """Create and configure the main window"""
     global root
     root = tk.Tk()
+
+    # ctk.set_appearance_mode("dark")
+    # ctk.set_default_color_theme("blue")
+    #
+    # root = ctk.CTk()
+
     root.title("Tool Condition Monitor")
     root.geometry("800x600")
     root.minsize(600, 500)
 
-    # Configure style
+    #Configure style
     style = ttk.Style()
-    style.theme_use('clam')
+    style.theme_use('default')
+    print(style.theme_names())
+
 
     initialize_variables()
     create_widgets()
@@ -102,202 +112,8 @@ def create_guide_tab():
     guide_text.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
 
     # Insert the comprehensive user guide
-    guide_content = """
-🔧 TOOL CONDITION MONITOR - USER GUIDE
-═══════════════════════════════════════════════════════════════════════════════
-
-📋 OVERVIEW
-This application allows you to train machine learning models to classify tool conditions
-and test them on new data. It supports Random Forest and SVM algorithms for detecting:
-• Normal condition
-• Unbalance issues  
-• Misalignment problems
-• Bearing faults
-
-═══════════════════════════════════════════════════════════════════════════════
-
-🎓 LEARNING MODE - Training New Models
-═══════════════════════════════════════════════════════════════════════════════
-
-1️⃣ SELECT MODEL TYPE
-   • Random Forest: Fast training, good performance, easier to interpret
-   • SVM: More complex, potentially higher accuracy, longer training time
-
-2️⃣ PREPARE YOUR DATA
-   Your training data should be organized in folders like this:
-
-   📁 training_data/
-   ├── 📁 normal/
-   │   ├── normal_sample_001.csv
-   │   ├── normal_sample_002.csv
-   │   └── ...
-   ├── 📁 bearing/
-   │   ├── bearing_fault_001.csv
-   │   ├── bearing_fault_002.csv
-   │   └── ...
-   ├── 📁 unbalance/
-   │   ├── unbalance_001.csv
-   │   └── ...
-   └── 📁 misalignment/
-       ├── misalignment_001.csv
-       └── ...
-
-   📄 CSV FORMAT: Each file should contain 4 columns: t, x, y, z
-   • t: Time values
-   • x, y, z: Acceleration data for each axis
-
-3️⃣ BROWSE FOR TRAINING FOLDER
-   Click "Browse" and select your main training data folder
-
-4️⃣ ENTER MODEL NAME (Optional)
-   • Leave empty: Auto-generates name like "random_forest_2024_01_15_14_30"
-   • Custom name: Enter your preferred name (e.g., "motor_classifier_v1")
-
-5️⃣ START TRAINING
-   • Click "Start Training"
-   • Monitor progress with the detailed progress bar
-   • Check "Results" tab for training logs and performance metrics
-
-⚠️  TRAINING TIPS:
-   • Ensure balanced data (similar number of samples per condition)
-   • More data = better model performance
-   • Training time depends on data size and model type
-   • SVM training is slower but may give better results
-
-═══════════════════════════════════════════════════════════════════════════════
-
-🔍 TESTING MODE - Using Trained Models
-═══════════════════════════════════════════════════════════════════════════════
-
-1️⃣ SELECT MODEL
-   • Choose from dropdown list of available models
-   • Click "Refresh" to update the list after training new models
-
-2️⃣ LOAD MODEL
-   • Click "Load Model" to initialize the selected model
-   • Wait for "Model loaded successfully" message
-
-3️⃣ SELECT TEST FILE
-   • Click "Browse" to choose a CSV file for testing
-   • File format: same as training data (t, x, y, z columns)
-
-4️⃣ RUN TEST
-   • Click "Run Test" to classify the condition
-   • Results appear in the "Results" tab with:
-     * Predicted condition
-     * Confidence percentage
-     * Probability breakdown for all conditions
-     * Maintenance recommendations
-
-═══════════════════════════════════════════════════════════════════════════════
-
-📊 SIGNAL VISUALIZATION
-═══════════════════════════════════════════════════════════════════════════════
-
-This tab allows you to visualize vibration signals:
-
-1️⃣ SELECT SIGNAL FILE
-   • Browse for any CSV file with vibration data
-
-2️⃣ PLOT SIGNAL
-   • View time-domain signals for X, Y, Z axes
-   • See frequency-domain (FFT) analysis
-   • Identify patterns and anomalies visually
-
-💡 VISUALIZATION TIPS:
-   • Normal signals: Smooth, regular patterns
-   • Bearing faults: High-frequency noise, spikes
-   • Unbalance: Strong fundamental frequency peaks
-   • Misalignment: Harmonic patterns
-
-═══════════════════════════════════════════════════════════════════════════════
-
-📈 RESULTS TAB
-═══════════════════════════════════════════════════════════════════════════════
-
-This tab shows:
-• Training progress and logs
-• Model performance metrics
-• Test results with detailed breakdowns
-• Timestamped activity log
-• Clear button to reset the log
-
-═══════════════════════════════════════════════════════════════════════════════
-
-🛠️ TROUBLESHOOTING
-═══════════════════════════════════════════════════════════════════════════════
-
-❌ "Training data folder does not exist"
-   → Check the folder path and ensure it exists
-
-❌ "No data processed"
-   → Verify CSV files are in subfolders (normal/, bearing/, etc.)
-   → Check CSV format (must have t, x, y, z columns)
-
-❌ "Model file not found"
-   → Click "Refresh" in testing mode
-   → Check if training completed successfully
-
-❌ Progress bar not updating
-   → Large datasets take time - be patient
-   → Check Results tab for detailed logs
-
-❌ Low model accuracy
-   → Increase training data size
-   → Ensure data quality and proper labeling
-   → Try different model types
-
-═══════════════════════════════════════════════════════════════════════════════
-
-📁 FILE LOCATIONS
-═══════════════════════════════════════════════════════════════════════════════
-
-Trained models are saved in: res/model/
-• Random Forest models: res/model/random_forest/
-• SVM models: res/model/svm/
-• Custom named models: res/model/[your_custom_name]/
-
-Additional files created:
-• Feature importance: [model_name]_feature_importance.csv
-• Model summary: [model_name]_summary.txt
-• Training logs: Available in Results tab
-
-═══════════════════════════════════════════════════════════════════════════════
-
-🎯 BEST PRACTICES
-═══════════════════════════════════════════════════════════════════════════════
-
-✅ DATA COLLECTION:
-   • Use consistent sampling rates
-   • Collect data under similar operating conditions
-   • Include multiple examples of each fault type
-   • Record normal operation data regularly
-
-✅ MODEL TRAINING:
-   • Start with Random Forest for quick results
-   • Use descriptive model names for easy identification
-   • Monitor training progress and logs
-   • Save multiple model versions for comparison
-
-✅ TESTING:
-   • Test on data from different time periods
-   • Verify results with known fault conditions
-   • Use confidence scores to assess reliability
-   • Regular model retraining with new data
-
-═══════════════════════════════════════════════════════════════════════════════
-
-📞 SUPPORT
-═══════════════════════════════════════════════════════════════════════════════
-
-For technical support or questions:
-• Check the Results tab for detailed error messages
-• Ensure all dependencies are installed
-• Verify data format and folder structure
-• Monitor system resources during training
-
-═══════════════════════════════════════════════════════════════════════════════
-"""
+    with open("res/guide.md", "r", encoding="utf-8") as f:
+        guide_content = f.read()
 
     guide_text.insert(1.0, guide_content)
     guide_text.config(state='disabled')  # Make it read-only
