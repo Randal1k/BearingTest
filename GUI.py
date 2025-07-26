@@ -1,7 +1,6 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
-from ttkthemes import ThemedTk
 import customtkinter as ctk
+from tkinter import filedialog, messagebox
+import tkinter as tk
 
 import threading
 import os
@@ -14,8 +13,11 @@ import numpy as np
 
 import tool_monitor as tm
 
-# Global Vars
+# Set the appearance mode and default color theme
+ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
+ctk.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
 
+# Global Vars
 root = None
 notebook = None
 current_mode = None
@@ -46,52 +48,41 @@ fig = None
 canvas = None
 
 
-
 def create_main_window():
     """Create and configure the main window"""
     global root
-    root = tk.Tk()
-
-    # ctk.set_appearance_mode("dark")
-    # ctk.set_default_color_theme("blue")
-    #
-    # root = ctk.CTk()
-
+    root = ctk.CTk()
     root.title("Tool Condition Monitor")
-    root.geometry("800x600")
-    root.minsize(600, 500)
-
-    #Configure style
-    style = ttk.Style()
-    style.theme_use('default')
-    print(style.theme_names())
-
+    root.geometry("1060x800")
+    root.minsize(800, 600)
 
     initialize_variables()
     create_widgets()
     refresh_available_models()
     on_mode_change()
 
+
 def initialize_variables():
     """Initialize all global variables"""
     global current_mode, model_type, selected_model, training_folder, test_file, viz_file, is_running, predict_function, custom_model_name
-
-    current_mode = tk.StringVar(value="learning")
-    model_type = tk.StringVar(value="random_forest")
-    selected_model = tk.StringVar()
-    training_folder = tk.StringVar()
-    test_file = tk.StringVar()
-    viz_file = tk.StringVar()
-    custom_model_name = tk.StringVar()
     global progress_frame, status_frame
+
+    current_mode = ctk.StringVar(value="learning")
+    model_type = ctk.StringVar(value="random_forest")
+    selected_model = ctk.StringVar()
+    training_folder = ctk.StringVar()
+    test_file = ctk.StringVar()
+    viz_file = ctk.StringVar()
+    custom_model_name = ctk.StringVar()
+
 
 def create_widgets():
     """Create all GUI widgets"""
     global notebook
 
-    # Create main notebook for tabs
-    notebook = ttk.Notebook(root)
-    notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    # Create main tabview
+    notebook = ctk.CTkTabview(root, width=800, height=600)
+    notebook.pack(fill="both", expand=True, padx=20, pady=20)
 
     # Create tabs
     create_guide_tab()
@@ -103,20 +94,20 @@ def create_widgets():
 def create_guide_tab():
     """Create the user guide tab"""
     # Guide tab
-    guide_frame = ttk.Frame(notebook)
-    notebook.add(guide_frame, text="📖 User Guide")
+    guide_tab = notebook.add("📖 User Guide")
 
     # Create scrollable text widget for the guide
-    guide_text = scrolledtext.ScrolledText(guide_frame, wrap=tk.WORD,
-                                           height=25, width=80, font=('TkDefaultFont', 10))
-    guide_text.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+    guide_text = ctk.CTkTextbox(guide_tab, wrap="word", height=500, width=750,
+                                font=ctk.CTkFont(size=16))
+    guide_text.pack(fill="both", expand=True, padx=15, pady=15)
 
     # Insert the comprehensive user guide
-    with open("res/guide.md", "r", encoding="utf-8") as f:
-        guide_content = f.read()
-
-    guide_text.insert(1.0, guide_content)
-    guide_text.config(state='disabled')  # Make it read-only
+    try:
+        with open("res/guide.md", "r", encoding="utf-8") as f:
+            guide_content = f.read()
+        guide_text.insert("1.0", guide_content)
+    except FileNotFoundError:
+        guide_text.insert("1.0", "User guide file not found. Please ensure 'res/guide.md' exists.")
 
 
 def create_main_tab():
@@ -126,97 +117,144 @@ def create_main_tab():
     global progress_frame, status_frame
 
     # Main tab frame
-    main_frame = ttk.Frame(notebook)
-    notebook.add(main_frame, text="Main")
+    main_tab = notebook.add("🔧 Main")
+
+    # Create scrollable frame for main content
+    scrollable_frame = ctk.CTkScrollableFrame(main_tab, width=750, height=500)
+    scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Mode selection frame
-    mode_frame = ttk.LabelFrame(main_frame, text="Select Mode", padding="10")
-    mode_frame.pack(fill=tk.X, padx=10, pady=5)
+    mode_frame = ctk.CTkFrame(scrollable_frame)
+    mode_frame.pack(fill="x", padx=10, pady=10)
 
-    ttk.Radiobutton(mode_frame, text="Learning Mode",
-                    variable=current_mode, value="learning",
-                    command=on_mode_change).pack(side=tk.LEFT, padx=10)
-    ttk.Radiobutton(mode_frame, text="Testing Mode",
-                    variable=current_mode, value="testing",
-                    command=on_mode_change).pack(side=tk.LEFT, padx=10)
+    mode_label = ctk.CTkLabel(mode_frame, text="Select Mode", font=ctk.CTkFont(size=14, weight="bold"))
+    mode_label.pack(pady=(10, 5))
+
+    mode_button_frame = ctk.CTkFrame(mode_frame, fg_color="transparent")
+    mode_button_frame.pack(pady=(0, 10))
+
+    learning_radio = ctk.CTkRadioButton(mode_button_frame, text="Learning Mode",
+                                        variable=current_mode, value="learning",
+                                        command=on_mode_change, font=ctk.CTkFont(size=11))
+    learning_radio.pack(side="left", padx=15, pady=5)
+
+    testing_radio = ctk.CTkRadioButton(mode_button_frame, text="Testing Mode",
+                                       variable=current_mode, value="testing",
+                                       command=on_mode_change, font=ctk.CTkFont(size=11))
+    testing_radio.pack(side="left", padx=15, pady=5)
 
     # Learning mode frame
-    learning_frame = ttk.LabelFrame(main_frame, text="Learning Configuration", padding="10")
-    learning_frame.pack(fill=tk.X, padx=10, pady=5)
+    learning_frame = ctk.CTkFrame(scrollable_frame)
+    learning_frame.pack(fill="x", padx=10, pady=10)
+
+    learning_label = ctk.CTkLabel(learning_frame, text="Learning Configuration",
+                                  font=ctk.CTkFont(size=16, weight="bold"))
+    learning_label.pack(pady=(10, 15))
 
     # Model type selection
-    ttk.Label(learning_frame, text="Model Type:").grid(row=0, column=0, sticky=tk.W, pady=2)
-    model_combo_learning = ttk.Combobox(learning_frame, textvariable=model_type,
-                                        values=["random_forest", "svm"], state="readonly", width=20)
-    model_combo_learning.grid(row=0, column=1, sticky=tk.W, padx=10, pady=2)
+    model_type_frame = ctk.CTkFrame(learning_frame)
+    model_type_frame.pack(fill="x", padx=20, pady=5)
+
+    ctk.CTkLabel(model_type_frame, text="Model Type:",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
+    model_combo_learning = ctk.CTkComboBox(model_type_frame, variable=model_type,
+                                           values=["random_forest", "svm"], width=200)
+    model_combo_learning.pack(side="left", padx=10, pady=10)
 
     # Training folder selection
-    ttk.Label(learning_frame, text="Training Data Folder:").grid(row=1, column=0, sticky=tk.W, pady=2)
-    ttk.Entry(learning_frame, textvariable=training_folder, width=40).grid(row=1, column=1, sticky=tk.W, padx=10,
-                                                                           pady=2)
-    ttk.Button(learning_frame, text="Browse",
-               command=browse_training_folder).grid(row=1, column=2, padx=5, pady=2)
+    folder_frame = ctk.CTkFrame(learning_frame)
+    folder_frame.pack(fill="x", padx=20, pady=5)
+
+    ctk.CTkLabel(folder_frame, text="Training Data Folder:",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
+    training_entry = ctk.CTkEntry(folder_frame, textvariable=training_folder, width=300)
+    training_entry.pack(side="left", padx=10, pady=10)
+    browse_folder_btn = ctk.CTkButton(folder_frame, text="Browse", width=80,
+                                      command=browse_training_folder)
+    browse_folder_btn.pack(side="left", padx=5, pady=10)
 
     # Custom model name
-    ttk.Label(learning_frame, text="Model Name (optional):").grid(row=2, column=0, sticky=tk.W, pady=2)
-    custom_name_entry = ttk.Entry(learning_frame, textvariable=custom_model_name, width=40)
-    custom_name_entry.grid(row=2, column=1, sticky=tk.W, padx=10, pady=2)
-    ttk.Label(learning_frame, text="Leave empty for auto-naming", font=('TkDefaultFont', 8),
-              foreground='gray').grid(row=2, column=2, sticky=tk.W, padx=5, pady=2)
+    name_frame = ctk.CTkFrame(learning_frame)
+    name_frame.pack(fill="x", padx=20, pady=5)
+
+    ctk.CTkLabel(name_frame, text="Model Name (optional):",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
+    custom_name_entry = ctk.CTkEntry(name_frame, textvariable=custom_model_name, width=300)
+    custom_name_entry.pack(side="left", padx=10, pady=10)
+    ctk.CTkLabel(name_frame, text="Leave empty for auto-naming",
+                 text_color="gray").pack(side="left", padx=5, pady=10)
 
     # Start training button
-    train_button = ttk.Button(learning_frame, text="Start Training",
-                              command=start_training)
-    train_button.grid(row=3, column=0, columnspan=3, pady=10)
+    train_button = ctk.CTkButton(learning_frame, text="🚀 Start Training", height=40,
+                                 font=ctk.CTkFont(size=14, weight="bold"),
+                                 command=start_training)
+    train_button.pack(pady=20)
 
     # Testing mode frame
-    testing_frame = ttk.LabelFrame(main_frame, text="Testing Configuration", padding="10")
-    testing_frame.pack(fill=tk.X, padx=10, pady=5)
+    testing_frame = ctk.CTkFrame(scrollable_frame)
+    testing_frame.pack(fill="x", padx=10, pady=10)
+
+    testing_label = ctk.CTkLabel(testing_frame, text="Testing Configuration",
+                                 font=ctk.CTkFont(size=16, weight="bold"))
+    testing_label.pack(pady=(10, 15))
 
     # Model selection
-    ttk.Label(testing_frame, text="Select Model:").grid(row=0, column=0, sticky=tk.W, pady=2)
-    model_combo = ttk.Combobox(testing_frame, textvariable=selected_model,
-                               state="readonly", width=40)
-    model_combo.grid(row=0, column=1, sticky=tk.W, padx=10, pady=2)
-    ttk.Button(testing_frame, text="Refresh",
-               command=refresh_available_models).grid(row=0, column=2, padx=5, pady=2)
+    model_select_frame = ctk.CTkFrame(testing_frame)
+    model_select_frame.pack(fill="x", padx=20, pady=5)
+
+    ctk.CTkLabel(model_select_frame, text="Select Model:",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
+    model_combo = ctk.CTkComboBox(model_select_frame, variable=selected_model, width=300)
+    model_combo.pack(side="left", padx=10, pady=10)
+    refresh_btn = ctk.CTkButton(model_select_frame, text="🔄 Refresh", width=80,
+                                command=refresh_available_models)
+    refresh_btn.pack(side="left", padx=5, pady=10)
 
     # Test file selection
-    ttk.Label(testing_frame, text="Test Data File:").grid(row=1, column=0, sticky=tk.W, pady=2)
-    ttk.Entry(testing_frame, textvariable=test_file, width=40).grid(row=1, column=1, sticky=tk.W, padx=10, pady=2)
-    ttk.Button(testing_frame, text="Browse",
-               command=browse_test_file).grid(row=1, column=2, padx=5, pady=2)
+    test_file_frame = ctk.CTkFrame(testing_frame)
+    test_file_frame.pack(fill="x", padx=20, pady=5)
+
+    ctk.CTkLabel(test_file_frame, text="Test Data File:",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
+    test_entry = ctk.CTkEntry(test_file_frame, textvariable=test_file, width=300)
+    test_entry.pack(side="left", padx=10, pady=10)
+    browse_test_btn = ctk.CTkButton(test_file_frame, text="Browse", width=80,
+                                    command=browse_test_file)
+    browse_test_btn.pack(side="left", padx=5, pady=10)
 
     # Load model and test buttons
-    button_frame = ttk.Frame(testing_frame)
-    button_frame.grid(row=2, column=0, columnspan=3, pady=10)
+    button_frame = ctk.CTkFrame(testing_frame)
+    button_frame.pack(pady=20)
 
-    load_model_button = ttk.Button(button_frame, text="Load Model", command=load_model)
-    load_model_button.pack(side=tk.LEFT, padx=5)
+    load_model_button = ctk.CTkButton(button_frame, text="📁 Load Model", height=35,
+                                      font=ctk.CTkFont(size=12, weight="bold"),
+                                      command=load_model)
+    load_model_button.pack(side="left", padx=10)
 
-    test_button = ttk.Button(button_frame, text="Run Test", command=run_test)
-    test_button.pack(side=tk.LEFT, padx=5)
+    test_button = ctk.CTkButton(button_frame, text="🧪 Run Test", height=35,
+                                font=ctk.CTkFont(size=12, weight="bold"),
+                                command=run_test)
+    test_button.pack(side="left", padx=10)
 
-    # Progress section - Fixed position to prevent jumping
-    progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="10")
-    progress_frame.pack(fill=tk.X, padx=10, pady=5)
-    progress_frame.pack_propagate(False)  # Prevent size changes
-    progress_frame.config(height=100)  # Fixed height
+    # Progress section
+    progress_frame = ctk.CTkFrame(scrollable_frame)
+    progress_frame.pack(fill="x", padx=10, pady=10)
 
-    # Progress bar (determinate for file processing)
-    progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
-    progress_bar.pack(fill=tk.X, pady=(0, 5))
+    progress_label = ctk.CTkLabel(progress_frame, text="Progress",
+                                  font=ctk.CTkFont(size=16, weight="bold"))
+    progress_label.pack(pady=(10, 5))
 
-    # Progress details label (using monospace font for alignment)
-    progress_detail_label = ttk.Label(progress_frame, text="Ready to start training...",
-                                      font=('Courier', 9))
-    progress_detail_label.pack(fill=tk.X)
+    # Progress bar
+    progress_bar = ctk.CTkProgressBar(progress_frame, width=600, height=20)
+    progress_bar.pack(padx=20, pady=(5, 0))
+    progress_bar.set(0)
 
-    # Status label - Fixed position
-    status_frame = ttk.Frame(main_frame)
-    status_frame.pack(fill=tk.X, padx=10, pady=2)
-    status_label = ttk.Label(status_frame, text="Ready")
-    status_label.pack()
+    # Status label
+    status_frame = ctk.CTkFrame(scrollable_frame)
+    status_frame.pack(fill="x", padx=10, pady=0)
+    status_label = ctk.CTkLabel(status_frame, text="Ready",
+                                font=ctk.CTkFont(size=12, weight="bold"))
+    status_label.pack(pady=10)
 
 
 def create_visualization_tab():
@@ -224,22 +262,39 @@ def create_visualization_tab():
     global fig, canvas
 
     # Visualization tab
-    viz_frame = ttk.Frame(notebook)
-    notebook.add(viz_frame, text="Signal Visualization")
+    viz_tab = notebook.add("📊 Signal Visualization")
 
     # File selection for visualization
-    file_frame = ttk.LabelFrame(viz_frame, text="Signal File", padding="10")
-    file_frame.pack(fill=tk.X, padx=10, pady=5)
+    file_frame = ctk.CTkFrame(viz_tab)
+    file_frame.pack(fill="x", padx=10, pady=10)
 
-    ttk.Entry(file_frame, textvariable=viz_file, width=50).pack(side=tk.LEFT, padx=5)
-    ttk.Button(file_frame, text="Browse", command=browse_viz_file).pack(side=tk.LEFT, padx=5)
-    ttk.Button(file_frame, text="Plot Signal", command=plot_signal).pack(side=tk.LEFT, padx=5)
+    file_label = ctk.CTkLabel(file_frame, text="Signal File",
+                              font=ctk.CTkFont(size=16, weight="bold"))
+    file_label.pack(pady=(10, 5))
+
+    file_select_frame = ctk.CTkFrame(file_frame)
+    file_select_frame.pack(pady=(0, 10))
+
+    viz_entry = ctk.CTkEntry(file_select_frame, textvariable=viz_file, width=400)
+    viz_entry.pack(side="left", padx=10, pady=10)
+
+    browse_viz_btn = ctk.CTkButton(file_select_frame, text="Browse", width=80,
+                                   command=browse_viz_file)
+    browse_viz_btn.pack(side="left", padx=5, pady=10)
+
+    plot_btn = ctk.CTkButton(file_select_frame, text="📈 Plot Signal", width=120,
+                             font=ctk.CTkFont(size=12, weight="bold"),
+                             command=plot_signal)
+    plot_btn.pack(side="left", padx=5, pady=10)
+
+    # Matplotlib canvas frame
+    canvas_frame = ctk.CTkFrame(viz_tab)
+    canvas_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     # Matplotlib canvas
-    global fig, canvas
-    fig = Figure(figsize=(10, 8))
-    canvas = FigureCanvasTkAgg(fig, viz_frame)
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    fig = Figure(figsize=(12, 8), facecolor='white')
+    canvas = FigureCanvasTkAgg(fig, canvas_frame)
+    canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
 
 
 def create_results_tab():
@@ -247,21 +302,23 @@ def create_results_tab():
     global results_text
 
     # Results tab
-    results_frame = ttk.Frame(notebook)
-    notebook.add(results_frame, text="Results")
+    results_tab = notebook.add("📋 Results")
 
     # Results display
-    results_text = scrolledtext.ScrolledText(results_frame, wrap=tk.WORD,
-                                             height=20, width=80)
-    results_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    results_text = ctk.CTkTextbox(results_tab, wrap="word", height=450, width=750,
+                                  font=ctk.CTkFont(family="Courier", size=16))
+    results_text.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Clear button
-    ttk.Button(results_frame, text="Clear Results",
-               command=lambda: results_text.delete(1.0, tk.END)).pack(pady=5)
+    clear_btn = ctk.CTkButton(results_tab, text="🗑️ Clear Results", height=35,
+                              font=ctk.CTkFont(size=12, weight="bold"),
+                              command=lambda: results_text.delete("1.0", "end"))
+    clear_btn.pack(pady=10)
 
 
 def on_mode_change():
     """Handle mode change between learning and testing"""
+
     learning_frame.pack_forget()
     testing_frame.pack_forget()
 
@@ -270,9 +327,9 @@ def on_mode_change():
     else:
         testing_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        # Zawsze pakuj te ramki na końcu (żeby nie przeskakiwały)
-    progress_frame.pack(fill=tk.X, padx=10, pady=5)
-    status_frame.pack(fill=tk.X, padx=10, pady=2)
+    # Always pack progress frame at the end
+    progress_frame.pack(fill="x", padx=10, pady=10)
+    status_frame.pack(fill="x", padx=10, pady=5)
 
 
 def browse_training_folder():
@@ -315,9 +372,10 @@ def refresh_available_models():
                         models.append(relative_path)
 
         if model_combo:
-            model_combo['values'] = models
+            model_combo.configure(values=models)
             if models and not selected_model.get():
                 selected_model.set(models[0])
+                model_combo.set(models[0])
 
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
@@ -347,74 +405,16 @@ def format_time(seconds):
 
 
 def update_progress(current, total, elapsed_time=None):
-    """
-    Update progress bar and details
-
-    DETAILED EXPLANATION OF PROGRESS BAR:
-
-    1. THREAD SAFETY: This function can be called from worker threads, but GUI updates
-       must happen in the main thread. We use root.after(0, _update) to schedule
-       the actual GUI update in the main thread.
-
-    2. PROGRESS CALCULATION:
-       - percentage = (current / total) * 100  # Calculate completion percentage
-       - progress_bar['value'] = percentage    # Update the visual progress bar
-
-    3. VISUAL PROGRESS BAR:
-       - Uses Unicode block characters (█) to create a visual bar
-       - int(percentage/10) determines how many blocks to show (0-10 blocks)
-       - Remaining spaces are filled with '  ' (two spaces per missing block)
-
-    4. TIMING CALCULATIONS:
-       - speed = current / elapsed_time        # Files processed per second
-       - remaining_files = total - current     # How many files left
-       - eta = remaining_files / speed         # Estimated time to completion
-
-    5. FORMAT STRING:
-       Processing files:  61%|██████    | 2444/4000 [02:48<01:58, 13.18it/s]
-
-       Parts breakdown:
-       - "Processing files:" - Static label
-       - "61%" - Current percentage
-       - "|██████    |" - Visual progress bar (6 blocks filled, 4 empty)
-       - "2444/4000" - Current file / Total files
-       - "[02:48<01:58" - [elapsed_time<estimated_remaining_time]
-       - "13.18it/s]" - Processing speed (iterations/files per second)
-    """
+    """Update progress bar and details"""
 
     def _update():
         if total > 0:
-            # Calculate percentage and update progress bar
-            percentage = (current / total) * 100
-            progress_bar['value'] = percentage
-
-            # Calculate timing and speed information
-            if elapsed_time and elapsed_time > 0:
-                speed = current / elapsed_time  # Files per second
-                remaining_files = total - current
-                eta = remaining_files / speed if speed > 0 else 0
-
-                # Create visual progress bar using Unicode blocks
-                filled_blocks = int(percentage / 10)  # 0-10 blocks
-                empty_blocks = 10 - filled_blocks
-                visual_bar = '█' * filled_blocks + '  ' * empty_blocks
-
-                # Format the complete progress string (similar to tqdm)
-                progress_text = (f"Processing files: {percentage:3.0f}%|{visual_bar}| "
-                                 f"{current}/{total} [{format_time(elapsed_time)}<"
-                                 f"{format_time(eta)}, {speed:.2f}it/s]")
-            else:
-                # Simplified version without timing
-                filled_blocks = int(percentage / 10)
-                empty_blocks = 10 - filled_blocks
-                visual_bar = '█' * filled_blocks + '  ' * empty_blocks
-                progress_text = f"Processing files: {percentage:3.0f}%|{visual_bar}| {current}/{total}"
-
-            # Update the progress detail label
-            progress_detail_label.config(text=progress_text)
+            # Only update the progress bar, no text
+            progress_bar.set(current / total)  # CTkProgressBar uses 0-1 scale
 
     # Schedule the GUI update in the main thread (CRITICAL for thread safety)
     root.after(0, _update)
+
 
 def start_training():
     """Start model training in a separate thread"""
@@ -434,15 +434,14 @@ def start_training():
 
     # Start training in separate thread
     is_running = True
-    train_button.config(state='disabled')
-    progress_bar.config(mode='determinate')
-    progress_bar['value'] = 0
-    progress_detail_label.config(text="Initializing...")
-    status_label.config(text="Training in progress...")
+    train_button.configure(state='disabled')
+    progress_bar.set(0)
+    status_label.configure(text="Training in progress...")
 
     thread = threading.Thread(target=training_worker)
     thread.daemon = True
     thread.start()
+
 
 def training_worker():
     """Worker function for training (runs in separate thread)"""
@@ -490,15 +489,15 @@ def training_worker():
         # Update UI in main thread
         root.after(0, training_finished)
 
+
 def training_finished():
     """Called when training is finished"""
     global is_running
 
     is_running = False
-    train_button.config(state='normal')
-    progress_bar['value'] = 100
-    progress_detail_label.config(text="Training completed")
-    status_label.config(text="Training completed")
+    train_button.configure(state='normal')
+    progress_bar.set(1.0)
+    status_label.configure(text="Training completed")
     refresh_available_models()
 
 
@@ -511,7 +510,7 @@ def load_model():
         return
 
     try:
-        status_label.config(text="Loading model...")
+        status_label.configure(text="Loading model...")
 
         model_path = os.path.join('res', 'model', selected_model.get())
         if not os.path.exists(model_path):
@@ -521,11 +520,11 @@ def load_model():
         predict_function = tm.init_prediction(model_path)
 
         log_message(f"Model loaded: {selected_model.get()}")
-        status_label.config(text="Model loaded successfully")
+        status_label.configure(text="Model loaded successfully")
 
     except Exception as e:
         log_message(f"Error loading model: {str(e)}")
-        status_label.config(text="Error loading model")
+        status_label.configure(text="Error loading model")
 
 
 def run_test():
@@ -543,21 +542,21 @@ def run_test():
         return
 
     try:
-        status_label.config(text="Running test...")
+        status_label.configure(text="Running test...")
 
         result = predict_function(test_file.get())
 
         display_test_results(result)
-        status_label.config(text="Test completed")
+        status_label.configure(text="Test completed")
 
     except Exception as e:
         log_message(f"Test error: {str(e)}")
-        status_label.config(text="Test failed")
+        status_label.configure(text="Test failed")
 
 
 def display_test_results(result):
     """Display test results in results tab"""
-    notebook.select(2)  # Switch to results tab
+    notebook.set("📋 Results")  # Switch to results tab
 
     results_text_content = f"""
 === TEST RESULTS ===
@@ -581,8 +580,8 @@ RECOMMENDATIONS:
 
     results_text_content += "\n" + "=" * 50 + "\n\n"
 
-    results_text.insert(tk.END, results_text_content)
-    results_text.see(tk.END)
+    results_text.insert("end", results_text_content)
+    results_text.see("end")
 
 
 def plot_signal():
@@ -597,46 +596,54 @@ def plot_signal():
 
     try:
         fig.clear()
+        # Set white background for plots
+        fig.patch.set_facecolor('white')
 
-        # === WCZYTAJ CECHY Z PLIKU ===
+        # === LOAD FEATURES FROM FILE ===
         feature = tm.load_features(viz_file.get())
         print(feature)
 
-        # Sprawdź czy liczba wierszy dzieli się na 4 klasy
+        # Check if number of rows is divisible by 4 classes
         total_rows = feature.shape[0]
         if total_rows % 4 != 0:
             messagebox.showerror("Error", "Feature file does not have rows divisible by 4.")
             return
 
-        segment_size = total_rows // 4  # np. 400/4 = 100
+        segment_size = total_rows // 4  # e.g. 400/4 = 100
 
-        # Rysuj wykresy cech tylko dla osi X
-        tm.plot_axis_features_from_file(fig,'x', feature, segment_size)
+        # Plot feature charts only for X axis
+        tm.plot_axis_features_from_file(fig, 'x', feature, segment_size)
+
+        # Set white background for all subplots
+        for ax in fig.get_axes():
+            ax.set_facecolor('white')
 
         fig.tight_layout(rect=[0, 0, 1, 0.97])
         canvas.draw()
-        notebook.select(2)
+        notebook.set("📊 Signal Visualization")
 
     except Exception as e:
         messagebox.showerror("Error", f"Error plotting features: {str(e)}")
+
 
 def log_message(message):
     """Log message to results tab"""
     timestamp = pd.Timestamp.now().strftime("%H:%M:%S")
     log_entry = f"[{timestamp}] {message}\n"
-    results_text.insert(tk.END, log_entry)
-    results_text.see(tk.END)
+    results_text.insert("end", log_entry)
+    results_text.see("end")
 
 
 def clear_results():
     """Clear results text area"""
-    results_text.delete(1.0, tk.END)
+    results_text.delete("1.0", "end")
 
 
 def main():
     """Main function to run the application"""
     create_main_window()
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
