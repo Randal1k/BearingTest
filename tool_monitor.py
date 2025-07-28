@@ -233,8 +233,6 @@ def process_signal(data):
         allFeatures.update(feature)
 
     return allFeatures
-def save_features(data):
-    df = pd.DataFrame(data).to_csv('res/features.csv', index=None, header=None)
 
 def moving_average(data, window_size=15):
     window = np.ones(window_size) / window_size
@@ -424,8 +422,10 @@ def generate_unique_filename(base_path, extension):
             return new_path
         counter += 1
 
+def save_features(data,filename):
+    df = pd.DataFrame(data).to_csv(f'{filename}.csv', index=None, header=None)
 
-def save_model(filepath='trained_model.pkl', saveReadable=True):
+def save_model(filepath, feature_list, saveReadable=True):
     global model, scaler, feature_names, training_metadata
 
     if model is None:
@@ -535,6 +535,10 @@ def save_model(filepath='trained_model.pkl', saveReadable=True):
                         f.write(f"  Support: {report[class_name]['support']}\n\n")
 
         print(f"Model summary saved to {summary_path}")
+        print(base_name)
+
+    save_features(feature_list,base_name)
+
     return filepath
 
 def load_model(filepath=None):

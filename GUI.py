@@ -26,6 +26,7 @@ selected_model = None
 training_folder = None
 test_file = None
 viz_file = None
+viz_file_axis = None
 custom_model_name = None
 is_running = False
 predict_function = None
@@ -64,11 +65,12 @@ def create_main_window():
 
 def initialize_variables():
     """Initialize all global variables"""
-    global current_mode, model_type, selected_model, training_folder, test_file, viz_file, is_running, predict_function, custom_model_name
+    global current_mode, model_type, selected_model, training_folder,viz_file_axis, test_file, viz_file, is_running, predict_function, custom_model_name
     global progress_frame, status_frame
 
     current_mode = ctk.StringVar(value="learning")
     model_type = ctk.StringVar(value="random_forest")
+    viz_file_axis = ctk.StringVar(value="x")
     selected_model = ctk.StringVar()
     training_folder = ctk.StringVar()
     test_file = ctk.StringVar()
@@ -287,6 +289,14 @@ def create_visualization_tab():
                              command=plot_signal)
     plot_btn.pack(side="left", padx=5, pady=10)
 
+    axis_frame= ctk.CTkFrame(viz_tab)
+    axis_frame.pack(pady=(0, 10))
+    ctk.CTkLabel(axis_frame, text="Select axis:",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=5)
+    axis_combo = ctk.CTkComboBox(axis_frame, variable=viz_file_axis, values=["x","y","z"], width=150)
+    axis_combo.pack(side="left", padx=10, pady=10)
+
+
     # Matplotlib canvas frame
     canvas_frame = ctk.CTkFrame(viz_tab)
     canvas_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
@@ -477,7 +487,7 @@ def training_worker():
         )
         X, y, feature_names = tm.prepare_training_data(feature_list, labels)
         tm.train_model(X, y, model_type.get())
-        tm.save_model(model_filename, True)
+        tm.save_model(model_filename, feature_list,True,)
 
         log_message("Training completed successfully!")
         log_message(f"Model saved as: {model_filename}")
@@ -612,7 +622,7 @@ def plot_signal():
         segment_size = total_rows // 4  # e.g. 400/4 = 100
 
         # Plot feature charts only for X axis
-        tm.plot_axis_features_from_file(fig, 'x', feature, segment_size)
+        tm.plot_axis_features_from_file(fig, viz_file_axis.get(), feature, segment_size)
 
         # Set white background for all subplots
         for ax in fig.get_axes():
