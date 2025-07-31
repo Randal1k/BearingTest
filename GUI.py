@@ -735,6 +735,7 @@ Estimated Remaining Time: {rul_result['rul_days']:.1f} days ({rul_result['rul_ho
 Estimated Failure Date: {rul_result['estimated_failure_date']}
 Confidence Interval: {rul_result['confidence_interval_days'][0]:.1f} - {rul_result['confidence_interval_days'][1]:.1f} days
 Prediction Reliability: {rul_result['reliability_level']}
+Wear index: {rul_result['wear_index']}
 
 📋 MAINTENANCE RECOMMENDATIONS:
 """

@@ -25,36 +25,26 @@ def generate_synthetic_rul_data(feature_list, labels, time_horizon_days=365):
     rul_data = []
 
     # Define typical RUL ranges for each condition (in days)
-    rul_ranges = {
-        'normal': (300, 365),  # 10-12 months
-        'unbalance': (90, 180),  # 3-6 months
-        'misalignment': (60, 120),  # 2-4 months
-        'bearing': (1, 30)  # 1-30 days
+    rul_lookup = {
+        'normal': 330,
+        'unbalance': 150,
+        'misalignment': 90,
+        'bearing': 15
     }
 
-    for i, (features, label) in enumerate(zip(feature_list, labels)):
-        min_rul, max_rul = rul_ranges.get(label, (1, 30))
+    for features, label in zip(feature_list, labels):
+        base_rul = rul_lookup.get(label, 30)
 
-        # Add some randomness and feature-based adjustment
-        base_rul = np.random.uniform(min_rul, max_rul)
+        # Zużycie: im wyższe RMS i STD, tym większe zużycie
+        rms_avg = np.mean([features.get(f'rms_{a}', 0) for a in 'xyz'])
+        std_avg = np.mean([features.get(f'std_{a}', 0) for a in 'xyz'])
 
-        # Adjust based on feature severity (higher vibration = lower RUL)
-        severity_indicators = [
-            features.get('rms_x', 0),
-            features.get('rms_y', 0),
-            features.get('rms_z', 0),
-            features.get('std_x', 0),
-            features.get('std_y', 0),
-            features.get('std_z', 0)
-        ]
+        wear_index = (rms_avg + std_avg) / 2  # Możesz przeskalować
+        severity_factor = min(wear_index * 2, 1.0)  # 0–1 skala
 
-        avg_severity = np.mean(severity_indicators)
-        # Normalize severity (assuming values are typically 0-1 after normalization)
-        severity_factor = min(avg_severity * 2, 1.0)  # Cap at 1.0
-
-        # Reduce RUL based on severity
-        adjusted_rul = base_rul * (1 - severity_factor * 0.3)  # Reduce by up to 30%
-        adjusted_rul = max(adjusted_rul, 1)  # Minimum 1 day
+        # Redukcja RUL proporcjonalna do zużycia (do 40%)
+        adjusted_rul = base_rul * (1 - severity_factor * 0.4)
+        adjusted_rul = max(adjusted_rul, 1)
 
         rul_data.append(adjusted_rul)
 
@@ -310,6 +300,10 @@ def predict_rul(filepath, condition_result=None):
 
     features = tm.process_signal(df)
 
+    rms_avg = np.mean([features.get(f'rms_{a}', 0) for a in 'xyz'])
+    std_avg = np.mean([features.get(f'std_{a}', 0) for a in 'xyz'])
+    wear_index = (rms_avg + std_avg) / 2
+
     # Add condition as feature if provided
     if condition_result:
         condition_map = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'bearing': 3}
@@ -331,16 +325,18 @@ def predict_rul(filepath, condition_result=None):
     rul_days = rul_model.predict(X_scaled)[0]
     rul_days = max(rul_days, 1)  # Minimum 1 day
 
-    # Calculate confidence interval (for random forest)
+    # Calculate confidence interval
     if hasattr(rul_model, 'estimators_'):
         # Get predictions from all trees
-        tree_predictions = [tree.predict(X_scaled)[0] for tree in rul_model.estimators_]
-        std_dev = np.std(tree_predictions)
+        tree_preds = [tree.predict(X_scaled)[0] for tree in rul_model.estimators_]
+        std_dev = np.std(tree_preds)
         confidence_interval = (max(rul_days - 1.96 * std_dev, 1), rul_days + 1.96 * std_dev)
+        reliability = 'High' if std_dev < 15 else 'Medium' if std_dev < 40 else 'Low'
     else:
         # For SVM, use a simple heuristic
-        mae = rul_training_metadata.get('mae', 30)
+        mae = rul_training_metadata.get('mae', 25)
         confidence_interval = (max(rul_days - mae, 1), rul_days + mae)
+        reliability = 'Medium'  # brak możliwości oceny z rozrzutu
 
     # Convert to readable format
     estimated_date = datetime.now() + timedelta(days=int(rul_days))
@@ -377,7 +373,8 @@ def predict_rul(filepath, condition_result=None):
         'rul_hours': float(rul_days * 24),
         'estimated_failure_date': estimated_date.strftime('%Y-%m-%d'),
         'confidence_interval_days': (float(confidence_interval[0]), float(confidence_interval[1])),
-        'reliability_level': 'High' if std_dev < 30 else 'Medium' if std_dev < 60 else 'Low',
+        'reliability_level': reliability,
+        'wear_index': round(wear_index, 4),
         'recommendations': recommendations
     }
 
