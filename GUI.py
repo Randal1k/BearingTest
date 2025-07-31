@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 
 import tool_monitor as tm
+import RUL as rul  # Import the new RUL module
 
 # Set the appearance mode and default color theme
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
@@ -23,6 +24,7 @@ notebook = None
 current_mode = None
 model_type = None
 selected_model = None
+selected_rul_model = None  # New RUL model selection
 training_folder = None
 test_file = None
 viz_file = None
@@ -30,6 +32,7 @@ viz_file_axis = None
 custom_model_name = None
 is_running = False
 predict_function = None
+rul_predict_function = None  # New RUL prediction function
 
 current_file = 0
 total_files = 0
@@ -38,9 +41,12 @@ start_time = None
 learning_frame = None
 testing_frame = None
 train_button = None
+train_rul_button = None  # New RUL training button
 load_model_button = None
+load_rul_model_button = None  # New RUL model loading button
 test_button = None
 model_combo = None
+rul_model_combo = None  # New RUL model combo
 progress_bar = None
 progress_detail_label = None
 status_label = None
@@ -53,9 +59,9 @@ def create_main_window():
     """Create and configure the main window"""
     global root
     root = ctk.CTk()
-    root.title("Tool Condition Monitor")
-    root.geometry("1060x800")
-    root.minsize(800, 600)
+    root.title("Tool Condition Monitor with RUL Prediction")
+    root.geometry("1200x900")  # Increased size for RUL features
+    root.minsize(1000, 700)
 
     initialize_variables()
     create_widgets()
@@ -65,13 +71,14 @@ def create_main_window():
 
 def initialize_variables():
     """Initialize all global variables"""
-    global current_mode, model_type, selected_model, training_folder,viz_file_axis, test_file, viz_file, is_running, predict_function, custom_model_name
+    global current_mode, model_type, selected_model, selected_rul_model, training_folder, viz_file_axis, test_file, viz_file, is_running, predict_function, rul_predict_function, custom_model_name
     global progress_frame, status_frame
 
     current_mode = ctk.StringVar(value="learning")
     model_type = ctk.StringVar(value="random_forest")
     viz_file_axis = ctk.StringVar(value="x")
     selected_model = ctk.StringVar()
+    selected_rul_model = ctk.StringVar()  # New RUL model variable
     training_folder = ctk.StringVar()
     test_file = ctk.StringVar()
     viz_file = ctk.StringVar()
@@ -83,7 +90,7 @@ def create_widgets():
     global notebook
 
     # Create main tabview
-    notebook = ctk.CTkTabview(root, width=800, height=600)
+    notebook = ctk.CTkTabview(root, width=900, height=700)
     notebook.pack(fill="both", expand=True, padx=20, pady=20)
 
     # Create tabs
@@ -114,15 +121,15 @@ def create_guide_tab():
 
 def create_main_tab():
     """Create the main tab with learning and testing modes"""
-    global learning_frame, testing_frame, train_button, load_model_button
-    global test_button, model_combo, progress_bar, progress_detail_label, status_label
+    global learning_frame, testing_frame, train_button, train_rul_button, load_model_button, load_rul_model_button
+    global test_button, model_combo, rul_model_combo, progress_bar, progress_detail_label, status_label
     global progress_frame, status_frame
 
     # Main tab frame
     main_tab = notebook.add("🔧 Main")
 
     # Create scrollable frame for main content
-    scrollable_frame = ctk.CTkScrollableFrame(main_tab, width=750, height=500)
+    scrollable_frame = ctk.CTkScrollableFrame(main_tab, width=850, height=600)
     scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Mode selection frame
@@ -186,11 +193,19 @@ def create_main_tab():
     ctk.CTkLabel(name_frame, text="Leave empty for auto-naming",
                  text_color="gray").pack(side="left", padx=5, pady=10)
 
-    # Start training button
-    train_button = ctk.CTkButton(learning_frame, text="🚀 Start Training", height=40,
-                                 font=ctk.CTkFont(size=14, weight="bold"),
+    # Training buttons
+    button_frame = ctk.CTkFrame(learning_frame)
+    button_frame.pack(pady=20)
+
+    train_button = ctk.CTkButton(button_frame, text="🚀 Train Condition Model", height=40,
+                                 font=ctk.CTkFont(size=12, weight="bold"),
                                  command=start_training)
-    train_button.pack(pady=20)
+    train_button.pack(side="left", padx=10)
+
+    train_rul_button = ctk.CTkButton(button_frame, text="⏱️ Train RUL Model", height=40,
+                                     font=ctk.CTkFont(size=12, weight="bold"),
+                                     command=start_rul_training)
+    train_rul_button.pack(side="left", padx=10)
 
     # Testing mode frame
     testing_frame = ctk.CTkFrame(scrollable_frame)
@@ -200,17 +215,39 @@ def create_main_tab():
                                  font=ctk.CTkFont(size=16, weight="bold"))
     testing_label.pack(pady=(10, 15))
 
-    # Model selection
+    # Model selection for condition prediction
     model_select_frame = ctk.CTkFrame(testing_frame)
     model_select_frame.pack(fill="x", padx=20, pady=5)
 
-    ctk.CTkLabel(model_select_frame, text="Select Model:",
+    ctk.CTkLabel(model_select_frame, text="Condition Model:",
                  font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
-    model_combo = ctk.CTkComboBox(model_select_frame, variable=selected_model, width=300)
+    model_combo = ctk.CTkComboBox(model_select_frame, variable=selected_model, width=250)
     model_combo.pack(side="left", padx=10, pady=10)
-    refresh_btn = ctk.CTkButton(model_select_frame, text="🔄 Refresh", width=80,
+
+    load_model_button = ctk.CTkButton(model_select_frame, text="📁 Load", width=80,
+                                      command=load_model)
+    load_model_button.pack(side="left", padx=5, pady=10)
+
+    # RUL model selection
+    rul_model_select_frame = ctk.CTkFrame(testing_frame)
+    rul_model_select_frame.pack(fill="x", padx=20, pady=5)
+
+    ctk.CTkLabel(rul_model_select_frame, text="RUL Model:",
+                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
+    rul_model_combo = ctk.CTkComboBox(rul_model_select_frame, variable=selected_rul_model, width=250)
+    rul_model_combo.pack(side="left", padx=10, pady=10)
+
+    load_rul_model_button = ctk.CTkButton(rul_model_select_frame, text="📁 Load", width=80,
+                                          command=load_rul_model)
+    load_rul_model_button.pack(side="left", padx=5, pady=10)
+
+    # Refresh button for models
+    refresh_frame = ctk.CTkFrame(testing_frame)
+    refresh_frame.pack(fill="x", padx=20, pady=5)
+
+    refresh_btn = ctk.CTkButton(refresh_frame, text="🔄 Refresh Models", width=150,
                                 command=refresh_available_models)
-    refresh_btn.pack(side="left", padx=5, pady=10)
+    refresh_btn.pack(pady=10)
 
     # Test file selection
     test_file_frame = ctk.CTkFrame(testing_frame)
@@ -224,19 +261,14 @@ def create_main_tab():
                                     command=browse_test_file)
     browse_test_btn.pack(side="left", padx=5, pady=10)
 
-    # Load model and test buttons
-    button_frame = ctk.CTkFrame(testing_frame)
-    button_frame.pack(pady=20)
+    # Test button
+    test_button_frame = ctk.CTkFrame(testing_frame)
+    test_button_frame.pack(pady=20)
 
-    load_model_button = ctk.CTkButton(button_frame, text="📁 Load Model", height=35,
-                                      font=ctk.CTkFont(size=12, weight="bold"),
-                                      command=load_model)
-    load_model_button.pack(side="left", padx=10)
-
-    test_button = ctk.CTkButton(button_frame, text="🧪 Run Test", height=35,
-                                font=ctk.CTkFont(size=12, weight="bold"),
+    test_button = ctk.CTkButton(test_button_frame, text="🧪 Run Complete Analysis", height=40,
+                                font=ctk.CTkFont(size=14, weight="bold"),
                                 command=run_test)
-    test_button.pack(side="left", padx=10)
+    test_button.pack()
 
     # Progress section
     progress_frame = ctk.CTkFrame(scrollable_frame)
@@ -289,13 +321,12 @@ def create_visualization_tab():
                              command=plot_signal)
     plot_btn.pack(side="left", padx=5, pady=10)
 
-    axis_frame= ctk.CTkFrame(viz_tab)
+    axis_frame = ctk.CTkFrame(viz_tab)
     axis_frame.pack(pady=(0, 10))
     ctk.CTkLabel(axis_frame, text="Select axis:",
                  font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=5)
-    axis_combo = ctk.CTkComboBox(axis_frame, variable=viz_file_axis, values=["x","y","z"], width=150)
+    axis_combo = ctk.CTkComboBox(axis_frame, variable=viz_file_axis, values=["x", "y", "z"], width=150)
     axis_combo.pack(side="left", padx=10, pady=10)
-
 
     # Matplotlib canvas frame
     canvas_frame = ctk.CTkFrame(viz_tab)
@@ -316,7 +347,7 @@ def create_results_tab():
 
     # Results display
     results_text = ctk.CTkTextbox(results_tab, wrap="word", height=450, width=750,
-                                  font=ctk.CTkFont(family="Courier", size=16))
+                                  font=ctk.CTkFont(family="Courier", size=14))
     results_text.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Clear button
@@ -372,20 +403,31 @@ def browse_viz_file():
 def refresh_available_models():
     """Refresh the list of available models"""
     try:
-        models = []
+        condition_models = []
+        rul_models = []
         model_dir = 'res/model'
+
         if os.path.exists(model_dir):
             for root_dir, dirs, files in os.walk(model_dir):
                 for file in files:
                     if file.endswith('.pkl'):
                         relative_path = os.path.relpath(os.path.join(root_dir, file), model_dir)
-                        models.append(relative_path)
+                        if '_rul' in file:
+                            rul_models.append(relative_path)
+                        else:
+                            condition_models.append(relative_path)
 
         if model_combo:
-            model_combo.configure(values=models)
-            if models and not selected_model.get():
-                selected_model.set(models[0])
-                model_combo.set(models[0])
+            model_combo.configure(values=condition_models)
+            if condition_models and not selected_model.get():
+                selected_model.set(condition_models[0])
+                model_combo.set(condition_models[0])
+
+        if rul_model_combo:
+            rul_model_combo.configure(values=rul_models)
+            if rul_models and not selected_rul_model.get():
+                selected_rul_model.set(rul_models[0])
+                rul_model_combo.set(rul_models[0])
 
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
@@ -427,7 +469,7 @@ def update_progress(current, total, elapsed_time=None):
 
 
 def start_training():
-    """Start model training in a separate thread"""
+    """Start condition model training in a separate thread"""
     global is_running
 
     if not training_folder.get():
@@ -445,18 +487,47 @@ def start_training():
     # Start training in separate thread
     is_running = True
     train_button.configure(state='disabled')
+    train_rul_button.configure(state='disabled')
     progress_bar.set(0)
-    status_label.configure(text="Training in progress...")
+    status_label.configure(text="Training condition model...")
 
     thread = threading.Thread(target=training_worker)
     thread.daemon = True
     thread.start()
 
 
+def start_rul_training():
+    """Start RUL model training in a separate thread"""
+    global is_running
+
+    if not training_folder.get():
+        messagebox.showerror("Error", "Please select a training data folder")
+        return
+
+    if not os.path.exists(training_folder.get()):
+        messagebox.showerror("Error", "Training data folder does not exist")
+        return
+
+    if is_running:
+        messagebox.showwarning("Warning", "Training is already in progress")
+        return
+
+    # Start RUL training in separate thread
+    is_running = True
+    train_button.configure(state='disabled')
+    train_rul_button.configure(state='disabled')
+    progress_bar.set(0)
+    status_label.configure(text="Training RUL model...")
+
+    thread = threading.Thread(target=rul_training_worker)
+    thread.daemon = True
+    thread.start()
+
+
 def training_worker():
-    """Worker function for training (runs in separate thread)"""
+    """Worker function for condition training (runs in separate thread)"""
     try:
-        log_message("Starting training...")
+        log_message("Starting condition model training...")
         log_message(f"Training folder: {training_folder.get()}")
         log_message(f"Model type: {model_type.get()}")
 
@@ -487,13 +558,51 @@ def training_worker():
         )
         X, y, feature_names = tm.prepare_training_data(feature_list, labels)
         tm.train_model(X, y, model_type.get())
-        tm.save_model(model_filename, feature_list,True,)
+        tm.save_model(model_filename, feature_list, True)
 
-        log_message("Training completed successfully!")
+        log_message("Condition model training completed successfully!")
         log_message(f"Model saved as: {model_filename}")
 
     except Exception as e:
         log_message(f"Training error: {str(e)}")
+
+    finally:
+        # Update UI in main thread
+        root.after(0, training_finished)
+
+
+def rul_training_worker():
+    """Worker function for RUL training (runs in separate thread)"""
+    try:
+        log_message("Starting RUL model training...")
+        log_message(f"Training folder: {training_folder.get()}")
+        log_message(f"Model type: {model_type.get()}")
+
+        # Generate RUL model filename
+        if custom_model_name.get().strip():
+            custom_name = custom_model_name.get().strip()
+            if custom_name.endswith('.pkl'):
+                custom_name = custom_name[:-4]
+            rul_model_filename = f"{model_type.get()}/{custom_name}_rul.pkl"
+        else:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
+            rul_model_filename = f"{model_type.get()}/tool_rul_{model_type.get()}_{timestamp}.pkl"
+
+        log_message(f"RUL model will be saved as: {rul_model_filename}")
+
+        # Train RUL model
+        saved_filepath = rul.init_rul_training(
+            training_folder.get(),
+            model_type.get(),
+            update_progress
+        )
+
+        log_message("RUL model training completed successfully!")
+        log_message(f"RUL model saved as: {saved_filepath}")
+
+    except Exception as e:
+        log_message(f"RUL training error: {str(e)}")
 
     finally:
         # Update UI in main thread
@@ -506,21 +615,22 @@ def training_finished():
 
     is_running = False
     train_button.configure(state='normal')
+    train_rul_button.configure(state='normal')
     progress_bar.set(1.0)
     status_label.configure(text="Training completed")
     refresh_available_models()
 
 
 def load_model():
-    """Load selected model"""
+    """Load selected condition model"""
     global predict_function
 
     if not selected_model.get():
-        messagebox.showerror("Error", "Please select a model")
+        messagebox.showerror("Error", "Please select a condition model")
         return
 
     try:
-        status_label.configure(text="Loading model...")
+        status_label.configure(text="Loading condition model...")
 
         model_path = os.path.join('res', 'model', selected_model.get())
         if not os.path.exists(model_path):
@@ -529,16 +639,42 @@ def load_model():
         # Replace with your actual model loading
         predict_function = tm.init_prediction(model_path)
 
-        log_message(f"Model loaded: {selected_model.get()}")
-        status_label.configure(text="Model loaded successfully")
+        log_message(f"Condition model loaded: {selected_model.get()}")
+        status_label.configure(text="Condition model loaded successfully")
 
     except Exception as e:
-        log_message(f"Error loading model: {str(e)}")
-        status_label.configure(text="Error loading model")
+        log_message(f"Error loading condition model: {str(e)}")
+        status_label.configure(text="Error loading condition model")
+
+
+def load_rul_model():
+    """Load selected RUL model"""
+    global rul_predict_function
+
+    if not selected_rul_model.get():
+        messagebox.showerror("Error", "Please select a RUL model")
+        return
+
+    try:
+        status_label.configure(text="Loading RUL model...")
+
+        rul_model_path = os.path.join('res', 'model', selected_rul_model.get())
+        if not os.path.exists(rul_model_path):
+            raise FileNotFoundError(f"RUL model file not found: {rul_model_path}")
+
+        # Load RUL model
+        rul_predict_function = rul.init_rul_prediction(rul_model_path)
+
+        log_message(f"RUL model loaded: {selected_rul_model.get()}")
+        status_label.configure(text="RUL model loaded successfully")
+
+    except Exception as e:
+        log_message(f"Error loading RUL model: {str(e)}")
+        status_label.configure(text="Error loading RUL model")
 
 
 def run_test():
-    """Run test on selected file"""
+    """Run complete analysis (condition + RUL)"""
     if not test_file.get():
         messagebox.showerror("Error", "Please select a test file")
         return
@@ -548,49 +684,74 @@ def run_test():
         return
 
     if predict_function is None:
-        messagebox.showerror("Error", "Please load a model first")
+        messagebox.showerror("Error", "Please load a condition model first")
         return
 
     try:
-        status_label.configure(text="Running test...")
+        status_label.configure(text="Running analysis...")
 
-        result = predict_function(test_file.get())
+        # Run condition prediction
+        condition_result = predict_function(test_file.get())
 
-        display_test_results(result)
-        status_label.configure(text="Test completed")
+        # Run RUL prediction if model is loaded
+        rul_result = None
+        if rul_predict_function is not None:
+            rul_result = rul_predict_function(test_file.get(), condition_result)
+
+        display_complete_results(condition_result, rul_result)
+        status_label.configure(text="Analysis completed")
 
     except Exception as e:
         log_message(f"Test error: {str(e)}")
         status_label.configure(text="Test failed")
 
 
-def display_test_results(result):
-    """Display test results in results tab"""
+def display_complete_results(condition_result, rul_result=None):
+    """Display complete test results including RUL in results tab"""
     notebook.set("📋 Results")  # Switch to results tab
 
-    results_text_content = f"""
-=== TEST RESULTS ===
+    results_content = f"""
+=== COMPLETE TOOL ANALYSIS ===
 File: {test_file.get()}
-Model: {selected_model.get()}
+Condition Model: {selected_model.get()}
+Analysis Time: {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-PREDICTION:
-Condition: {result['condition'].upper()}
-Confidence: {result['confidence']:.2%}
+🔧 CONDITION ANALYSIS:
+Current Condition: {condition_result['condition'].upper()}
+Confidence: {condition_result['confidence']:.2%}
 
-PROBABILITIES:
-Normal: {result['probabilities']['normal']:.2%}
-Unbalance: {result['probabilities']['unbalance']:.2%}
-Misalignment: {result['probabilities']['misalignment']:.2%}
-Bearing: {result['probabilities']['bearing']:.2%}
-
-RECOMMENDATIONS:
+Detailed Probabilities:
+• Normal: {condition_result['probabilities']['normal']:.2%}
+• Unbalance: {condition_result['probabilities']['unbalance']:.2%}
+• Misalignment: {condition_result['probabilities']['misalignment']:.2%}
+• Bearing Issue: {condition_result['probabilities']['bearing']:.2%}
 """
-    for rec in result['recommendations']:
-        results_text_content += f"• {rec}\n"
 
-    results_text_content += "\n" + "=" * 50 + "\n\n"
+    if rul_result:
+        results_content += f"""
+⏱️ REMAINING USEFUL LIFE (RUL):
+RUL Model: {selected_rul_model.get()}
+Estimated Remaining Time: {rul_result['rul_days']:.1f} days ({rul_result['rul_hours']:.0f} hours)
+Estimated Failure Date: {rul_result['estimated_failure_date']}
+Confidence Interval: {rul_result['confidence_interval_days'][0]:.1f} - {rul_result['confidence_interval_days'][1]:.1f} days
+Prediction Reliability: {rul_result['reliability_level']}
 
-    results_text.insert("end", results_text_content)
+📋 MAINTENANCE RECOMMENDATIONS:
+"""
+        for rec in rul_result['recommendations']:
+            results_content += f"• {rec}\n"
+    else:
+        results_content += f"""
+⏱️ RUL PREDICTION: Not available (no RUL model loaded)
+
+📋 CONDITION-BASED RECOMMENDATIONS:
+"""
+        for rec in condition_result['recommendations']:
+            results_content += f"• {rec}\n"
+
+    results_content += "\n" + "=" * 60 + "\n\n"
+
+    results_text.insert("end", results_content)
     results_text.see("end")
 
 
@@ -621,7 +782,7 @@ def plot_signal():
 
         segment_size = total_rows // 4  # e.g. 400/4 = 100
 
-        # Plot feature charts only for X axis
+        # Plot feature charts only for selected axis
         tm.plot_axis_features_from_file(fig, viz_file_axis.get(), feature, segment_size)
 
         # Set white background for all subplots
