@@ -24,7 +24,6 @@ notebook = None
 current_mode = None
 model_type = None
 selected_model = None
-selected_rul_model = None  # New RUL model selection
 training_folder = None
 test_file = None
 viz_file = None
@@ -41,12 +40,9 @@ start_time = None
 learning_frame = None
 testing_frame = None
 train_button = None
-train_rul_button = None  # New RUL training button
 load_model_button = None
-load_rul_model_button = None  # New RUL model loading button
 test_button = None
 model_combo = None
-rul_model_combo = None  # New RUL model combo
 progress_bar = None
 progress_detail_label = None
 status_label = None
@@ -54,13 +50,14 @@ results_text = None
 fig = None
 canvas = None
 
+progress_value = 0.0
 
 def create_main_window():
     """Create and configure the main window"""
     global root
     root = ctk.CTk()
-    root.title("Tool Condition Monitor with RUL Prediction")
-    root.geometry("1200x900")  # Increased size for RUL features
+    root.title("Integrated Tool Condition Monitor with RUL Prediction")
+    root.geometry("1200x900")
     root.minsize(1000, 700)
 
     initialize_variables()
@@ -68,17 +65,22 @@ def create_main_window():
     refresh_available_models()
     on_mode_change()
 
+    root.bind("<<UpdateProgress>>", handle_progress_update)
+
+def handle_progress_update(event=None):
+    global progress_value
+    if progress_bar:
+        progress_bar.set(progress_value)
 
 def initialize_variables():
     """Initialize all global variables"""
-    global current_mode, model_type, selected_model, selected_rul_model, training_folder, viz_file_axis, test_file, viz_file, is_running, predict_function, rul_predict_function, custom_model_name
+    global current_mode, model_type, selected_model, training_folder, viz_file_axis, test_file, viz_file, is_running, predict_function, rul_predict_function, custom_model_name
     global progress_frame, status_frame
 
     current_mode = ctk.StringVar(value="learning")
     model_type = ctk.StringVar(value="random_forest")
     viz_file_axis = ctk.StringVar(value="x")
     selected_model = ctk.StringVar()
-    selected_rul_model = ctk.StringVar()  # New RUL model variable
     training_folder = ctk.StringVar()
     test_file = ctk.StringVar()
     viz_file = ctk.StringVar()
@@ -111,18 +113,60 @@ def create_guide_tab():
     guide_text.pack(fill="both", expand=True, padx=15, pady=15)
 
     # Insert the comprehensive user guide
-    try:
-        with open("res/guide.md", "r", encoding="utf-8") as f:
-            guide_content = f.read()
-        guide_text.insert("1.0", guide_content)
-    except FileNotFoundError:
-        guide_text.insert("1.0", "User guide file not found. Please ensure 'res/guide.md' exists.")
+    guide_content = """
+# INTEGRATED TOOL CONDITION MONITOR WITH RUL PREDICTION - USER GUIDE
+
+## Overview
+This application provides integrated tool condition monitoring and Remaining Useful Life (RUL) prediction.
+
+## Training Mode
+1. Select "Learning Mode"
+2. Choose model type (Random Forest or SVM)
+3. Select training data folder containing subfolders: normal, unbalance, misalignment, bearing
+4. Optionally provide a custom model name
+5. Click "🚀 Train Integrated Model" to train both condition and RUL models together
+
+The training will:
+- Train the condition classification model
+- Train the RUL regression model
+- Save both models in a single integrated file
+
+## Testing Mode
+1. Select "Testing Mode"
+2. Choose an integrated model file (.pkl)
+3. Click "📁 Load Integrated Model" to load both models
+4. Select a test data file (CSV format)
+5. Click "🧪 Run Complete Analysis" to get both condition and RUL predictions
+
+## Results
+The analysis provides:
+- Current tool condition (normal, unbalance, misalignment, bearing)
+- Confidence levels and probabilities
+- Remaining Useful Life estimate in days/hours
+- Estimated failure date
+- Maintenance recommendations
+
+## Signal Visualization
+Use the visualization tab to plot and analyze signal features for different axes (X, Y, Z).
+
+## File Structure
+- Training data: folder/condition_type/signal_files.csv
+- Models saved to: res/model/model_type/filename.pkl
+- Results and summaries automatically generated
+
+## Tips
+- Ensure CSV files have columns: t, x, y, z for signals
+- For consistent results, use the same model type for training and testing
+- Check the Results tab for detailed analysis outputs
+"""
+
+    guide_text.insert("1.0", guide_content)
 
 
 def create_main_tab():
     """Create the main tab with learning and testing modes"""
-    global learning_frame, testing_frame, train_button, train_rul_button, load_model_button, load_rul_model_button
-    global test_button, model_combo, rul_model_combo, progress_bar, progress_detail_label, status_label
+    global learning_frame, testing_frame, train_button, load_model_button
+    global test_button, model_combo, progress_bar, progress_detail_label, status_label
     global progress_frame, status_frame
 
     # Main tab frame
@@ -156,7 +200,7 @@ def create_main_tab():
     learning_frame = ctk.CTkFrame(scrollable_frame)
     learning_frame.pack(fill="x", padx=10, pady=10)
 
-    learning_label = ctk.CTkLabel(learning_frame, text="Learning Configuration",
+    learning_label = ctk.CTkLabel(learning_frame, text="Integrated Training Configuration",
                                   font=ctk.CTkFont(size=16, weight="bold"))
     learning_label.pack(pady=(10, 15))
 
@@ -193,53 +237,41 @@ def create_main_tab():
     ctk.CTkLabel(name_frame, text="Leave empty for auto-naming",
                  text_color="gray").pack(side="left", padx=5, pady=10)
 
-    # Training buttons
+    # Training button (single integrated training)
     button_frame = ctk.CTkFrame(learning_frame)
     button_frame.pack(pady=20)
 
-    train_button = ctk.CTkButton(button_frame, text="🚀 Train Condition Model", height=40,
-                                 font=ctk.CTkFont(size=12, weight="bold"),
-                                 command=start_training)
-    train_button.pack(side="left", padx=10)
+    train_button = ctk.CTkButton(button_frame, text="🚀 Train Integrated Model", height=40,
+                                 font=ctk.CTkFont(size=14, weight="bold"),
+                                 command=start_integrated_training)
+    train_button.pack()
 
-    train_rul_button = ctk.CTkButton(button_frame, text="⏱️ Train RUL Model", height=40,
-                                     font=ctk.CTkFont(size=12, weight="bold"),
-                                     command=start_rul_training)
-    train_rul_button.pack(side="left", padx=10)
+    # Info label
+    info_label = ctk.CTkLabel(button_frame,
+                              text="This will train both condition and RUL models together",
+                              text_color="gray", font=ctk.CTkFont(size=10))
+    info_label.pack(pady=(5, 0))
 
     # Testing mode frame
     testing_frame = ctk.CTkFrame(scrollable_frame)
     testing_frame.pack(fill="x", padx=10, pady=10)
 
-    testing_label = ctk.CTkLabel(testing_frame, text="Testing Configuration",
+    testing_label = ctk.CTkLabel(testing_frame, text="Integrated Testing Configuration",
                                  font=ctk.CTkFont(size=16, weight="bold"))
     testing_label.pack(pady=(10, 15))
 
-    # Model selection for condition prediction
+    # Model selection for integrated prediction
     model_select_frame = ctk.CTkFrame(testing_frame)
     model_select_frame.pack(fill="x", padx=20, pady=5)
 
-    ctk.CTkLabel(model_select_frame, text="Condition Model:",
+    ctk.CTkLabel(model_select_frame, text="Integrated Model:",
                  font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
-    model_combo = ctk.CTkComboBox(model_select_frame, variable=selected_model, width=250)
+    model_combo = ctk.CTkComboBox(model_select_frame, variable=selected_model, width=300)
     model_combo.pack(side="left", padx=10, pady=10)
 
-    load_model_button = ctk.CTkButton(model_select_frame, text="📁 Load", width=80,
-                                      command=load_model)
+    load_model_button = ctk.CTkButton(model_select_frame, text="📁 Load Integrated Model", width=150,
+                                      command=load_integrated_model)
     load_model_button.pack(side="left", padx=5, pady=10)
-
-    # RUL model selection
-    rul_model_select_frame = ctk.CTkFrame(testing_frame)
-    rul_model_select_frame.pack(fill="x", padx=20, pady=5)
-
-    ctk.CTkLabel(rul_model_select_frame, text="RUL Model:",
-                 font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10, pady=10)
-    rul_model_combo = ctk.CTkComboBox(rul_model_select_frame, variable=selected_rul_model, width=250)
-    rul_model_combo.pack(side="left", padx=10, pady=10)
-
-    load_rul_model_button = ctk.CTkButton(rul_model_select_frame, text="📁 Load", width=80,
-                                          command=load_rul_model)
-    load_rul_model_button.pack(side="left", padx=5, pady=10)
 
     # Refresh button for models
     refresh_frame = ctk.CTkFrame(testing_frame)
@@ -267,7 +299,7 @@ def create_main_tab():
 
     test_button = ctk.CTkButton(test_button_frame, text="🧪 Run Complete Analysis", height=40,
                                 font=ctk.CTkFont(size=14, weight="bold"),
-                                command=run_test)
+                                command=run_integrated_test)
     test_button.pack()
 
     # Progress section
@@ -401,33 +433,28 @@ def browse_viz_file():
 
 
 def refresh_available_models():
-    """Refresh the list of available models"""
+    """Refresh the list of available integrated models"""
     try:
-        condition_models = []
-        rul_models = []
+        integrated_models = []
         model_dir = 'res/model'
 
         if os.path.exists(model_dir):
             for root_dir, dirs, files in os.walk(model_dir):
                 for file in files:
-                    if file.endswith('.pkl'):
+                    # Look for integrated model files (those containing both condition and RUL)
+                    if file.endswith('.pkl') and '_integrated' in file:
                         relative_path = os.path.relpath(os.path.join(root_dir, file), model_dir)
-                        if '_rul' in file:
-                            rul_models.append(relative_path)
-                        else:
-                            condition_models.append(relative_path)
+                        integrated_models.append(relative_path)
+                    # Also include regular models for backward compatibility
+                    elif file.endswith('.pkl') and '_rul' not in file:
+                        relative_path = os.path.relpath(os.path.join(root_dir, file), model_dir)
+                        integrated_models.append(relative_path)
 
         if model_combo:
-            model_combo.configure(values=condition_models)
-            if condition_models and not selected_model.get():
-                selected_model.set(condition_models[0])
-                model_combo.set(condition_models[0])
-
-        if rul_model_combo:
-            rul_model_combo.configure(values=rul_models)
-            if rul_models and not selected_rul_model.get():
-                selected_rul_model.set(rul_models[0])
-                rul_model_combo.set(rul_models[0])
+            model_combo.configure(values=integrated_models)
+            if integrated_models and not selected_model.get():
+                selected_model.set(integrated_models[0])
+                model_combo.set(integrated_models[0])
 
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
@@ -447,29 +474,19 @@ def count_csv_files(folder_path):
     return total
 
 
-def format_time(seconds):
-    """Format time in MM:SS format"""
-    if seconds < 0:
-        return "00:00"
-    minutes = int(seconds // 60)
-    seconds = int(seconds % 60)
-    return f"{minutes:02d}:{seconds:02d}"
-
-
 def update_progress(current, total, elapsed_time=None):
     """Update progress bar and details"""
 
     def _update():
         if total > 0:
-            # Only update the progress bar, no text
-            progress_bar.set(current / total)  # CTkProgressBar uses 0-1 scale
+            progress_bar.set(current / total)
 
-    # Schedule the GUI update in the main thread (CRITICAL for thread safety)
+    # Schedule the GUI update in the main thread
     root.after(0, _update)
 
 
-def start_training():
-    """Start condition model training in a separate thread"""
+def start_integrated_training():
+    """Start integrated training (both condition and RUL models) in a separate thread"""
     global is_running
 
     if not training_folder.get():
@@ -484,197 +501,217 @@ def start_training():
         messagebox.showwarning("Warning", "Training is already in progress")
         return
 
-    # Start training in separate thread
+    # Start integrated training in separate thread
     is_running = True
     train_button.configure(state='disabled')
-    train_rul_button.configure(state='disabled')
     progress_bar.set(0)
-    status_label.configure(text="Training condition model...")
+    status_label.configure(text="Training integrated model (condition + RUL)...")
 
-    thread = threading.Thread(target=training_worker)
+    thread = threading.Thread(target=integrated_training_worker)
     thread.daemon = True
     thread.start()
 
 
-def start_rul_training():
-    """Start RUL model training in a separate thread"""
+def integrated_training_worker():
+    """Worker function for integrated training (runs in separate thread)"""
+    import time
     global is_running
 
-    if not training_folder.get():
-        messagebox.showerror("Error", "Please select a training data folder")
-        return
-
-    if not os.path.exists(training_folder.get()):
-        messagebox.showerror("Error", "Training data folder does not exist")
-        return
-
-    if is_running:
-        messagebox.showwarning("Warning", "Training is already in progress")
-        return
-
-    # Start RUL training in separate thread
-    is_running = True
-    train_button.configure(state='disabled')
-    train_rul_button.configure(state='disabled')
-    progress_bar.set(0)
-    status_label.configure(text="Training RUL model...")
-
-    thread = threading.Thread(target=rul_training_worker)
-    thread.daemon = True
-    thread.start()
-
-
-def training_worker():
-    """Worker function for condition training (runs in separate thread)"""
     try:
-        log_message("Starting condition model training...")
+        start_time = time.time()
+        update_status("Loading data...")
+        progress_value = 0.05
+        root.event_generate("<<UpdateProgress>>", when="tail")
+
+        log_message("=== STARTING INTEGRATED TRAINING ===")
         log_message(f"Training folder: {training_folder.get()}")
         log_message(f"Model type: {model_type.get()}")
 
-        # Generate model filename
+        # Ustaw nazwę pliku
         if custom_model_name.get().strip():
-            # Use custom name but keep it in the model type folder
             custom_name = custom_model_name.get().strip()
-            # Remove .pkl extension if user added it
             if custom_name.endswith('.pkl'):
                 custom_name = custom_name[:-4]
-            model_filename = f"{model_type.get()}/{custom_name}.pkl"
-            log_message(f"Using custom model name: {custom_name}.pkl in {model_type.get()}/ folder")
+            model_filename = f"{model_type.get()}/{custom_name}_integrated.pkl"
         else:
-            # Auto-generate name with timestamp
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
-            model_filename = f"{model_type.get()}/tool_monitor_{model_type.get()}_{timestamp}.pkl"
-            log_message(f"Auto-generated model name: tool_monitor_{model_type.get()}_{timestamp}.pkl")
+            model_filename = f"{model_type.get()}/tool_monitor_integrated_{timestamp}.pkl"
 
-        # Count total files for progress tracking
-        total_files = count_csv_files(training_folder.get())
-        log_message(f"Found {total_files} files to process")
-
-        # Replace with your actual training function call
         feature_list, labels = tm.load_data_with_progress(
             training_folder.get(),
-            update_progress  # Pass the progress callback
+            lambda curr, total, elapsed: root.after(
+                0, lambda: progress_bar.set(min(0.05 + (curr / total) * 0.25, 0.3))
+            )
         )
-        X, y, feature_names = tm.prepare_training_data(feature_list, labels)
-        tm.train_model(X, y, model_type.get())
-        tm.save_model(model_filename, feature_list, True)
 
-        log_message("Condition model training completed successfully!")
-        log_message(f"Model saved as: {model_filename}")
+        if not feature_list:
+            log_message("❌ Error: No training data loaded!")
+            return
+
+        log_message(f"✅ Loaded {len(feature_list)} samples")
+
+        # Trening condition modelu
+        update_status("Training condition model...")
+        progress_value = 0.35
+        root.event_generate("<<UpdateProgress>>", when="tail")
+
+        X_condition, y_condition, _ = tm.prepare_training_data(feature_list, labels)
+        condition_model = tm.train_model(X_condition, y_condition, model_type.get())
+
+        log_message("✅ Condition model training completed.")
+        root.after(0, lambda: progress_bar.set(0.55))
+
+        # Trening RUL modelu
+        update_status("Training RUL model...")
+        rul_targets = rul.generate_synthetic_rul_data(feature_list, labels)
+        X_rul, y_rul, _ = rul.prepare_rul_training_data(feature_list, labels, rul_targets)
+
+        def rul_progress_callback(curr, total):
+            global progress_value
+            ratio = curr / total
+            progress_value = 0.6 + ratio * 0.35
+            root.event_generate("<<UpdateProgress>>", when="tail")
+            update_status(f"Training RUL... ({int(progress_value * 100)}%)")
+
+        rul.train_rul_model(X_rul, y_rul, model_type.get(), rul_progress_callback)
+
+        update_status("Saving model...")
+
+        save_filepath = save_integrated_model(model_filename, feature_list)
+        log_message("Integrated model training completed successfully!")
+        log_message(f"Model saved as: {save_filepath}")
+
+        progress_value = 1.0
+        root.event_generate("<<UpdateProgress>>", when="tail")
+
+        progress_bar.set(1.0)
+        elapsed = time.time() - start_time
+        update_status(f"✅ Done in {elapsed:.1f}s")
 
     except Exception as e:
-        log_message(f"Training error: {str(e)}")
-
-    finally:
-        # Update UI in main thread
-        root.after(0, training_finished)
+        update_status(f"❌ Error: {str(e)}")
 
 
-def rul_training_worker():
-    """Worker function for RUL training (runs in separate thread)"""
-    try:
-        log_message("Starting RUL model training...")
-        log_message(f"Training folder: {training_folder.get()}")
-        log_message(f"Model type: {model_type.get()}")
+def update_status(msg):
+    root.after(0, lambda: status_label.configure(text=msg))
 
-        # Generate RUL model filename
-        if custom_model_name.get().strip():
-            custom_name = custom_model_name.get().strip()
-            if custom_name.endswith('.pkl'):
-                custom_name = custom_name[:-4]
-            rul_model_filename = f"{model_type.get()}/{custom_name}_rul.pkl"
+def save_integrated_model(filepath, feature_list):
+    """Save integrated model containing both condition and RUL models"""
+    if tm.model is None or rul.rul_model is None:
+        raise ValueError("Both condition and RUL models must be trained before saving.")
+
+    # Ensure proper directory structure
+    if not filepath.startswith('res/model/'):
+        if '/' in filepath:
+            filepath = os.path.join('res/model', filepath)
         else:
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
-            rul_model_filename = f"{model_type.get()}/tool_rul_{model_type.get()}_{timestamp}.pkl"
+            filepath = os.path.join('res/model', filepath)
 
-        log_message(f"RUL model will be saved as: {rul_model_filename}")
+    # Create directory
+    model_dir = os.path.dirname(filepath)
+    os.makedirs(model_dir, exist_ok=True)
 
-        # Train RUL model
-        saved_filepath = rul.init_rul_training(
-            training_folder.get(),
-            model_type.get(),
-            update_progress
-        )
+    # Generate unique filename
+    original_filepath = filepath
+    counter = 1
+    while os.path.exists(filepath):
+        base_name = os.path.splitext(original_filepath)[0]
+        extension = os.path.splitext(original_filepath)[1]
+        filepath = f"{base_name}_{counter:03d}{extension}"
+        counter += 1
 
-        log_message("RUL model training completed successfully!")
-        log_message(f"RUL model saved as: {saved_filepath}")
+    # Prepare integrated model data
+    integrated_model_data = {
+        'condition_model': tm.model,
+        'condition_scaler': tm.scaler,
+        'condition_feature_names': tm.feature_names,
+        'condition_metadata': tm.training_metadata,
+        'rul_model': rul.rul_model,
+        'rul_scaler': rul.rul_scaler,
+        'rul_feature_names': rul.rul_feature_names,
+        'rul_metadata': rul.rul_training_metadata,
+        'integration_timestamp': pd.Timestamp.now().isoformat(),
+        'model_type': model_type.get()
+    }
 
-    except Exception as e:
-        log_message(f"RUL training error: {str(e)}")
+    # Save integrated model
+    import pickle
+    with open(filepath, 'wb') as f:
+        pickle.dump(integrated_model_data, f)
 
-    finally:
-        # Update UI in main thread
-        root.after(0, training_finished)
+    log_message(f"Integrated model saved to {filepath}")
 
+    # Save features
+    tm.save_features(feature_list, filepath)
 
-def training_finished():
-    """Called when training is finished"""
-    global is_running
-
-    is_running = False
-    train_button.configure(state='normal')
-    train_rul_button.configure(state='normal')
-    progress_bar.set(1.0)
-    status_label.configure(text="Training completed")
-    refresh_available_models()
+    return filepath
 
 
-def load_model():
-    """Load selected condition model"""
-    global predict_function
+def load_integrated_model():
+    """Load selected integrated model"""
+    global predict_function, rul_predict_function
 
     if not selected_model.get():
-        messagebox.showerror("Error", "Please select a condition model")
+        messagebox.showerror("Error", "Please select an integrated model")
         return
 
     try:
-        status_label.configure(text="Loading condition model...")
+        status_label.configure(text="Loading integrated model...")
 
         model_path = os.path.join('res', 'model', selected_model.get())
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
 
-        # Replace with your actual model loading
-        predict_function = tm.init_prediction(model_path)
+        # Load integrated model
+        import pickle
+        with open(model_path, 'rb') as f:
+            integrated_data = pickle.load(f)
 
-        log_message(f"Condition model loaded: {selected_model.get()}")
-        status_label.configure(text="Condition model loaded successfully")
+        # Check if it's an integrated model
+        if 'condition_model' in integrated_data and 'rul_model' in integrated_data:
+            # Load condition model components
+            tm.model = integrated_data['condition_model']
+            tm.scaler = integrated_data['condition_scaler']
+            tm.feature_names = integrated_data['condition_feature_names']
+            tm.training_metadata = integrated_data['condition_metadata']
+
+            # Load RUL model components
+            rul.rul_model = integrated_data['rul_model']
+            rul.rul_scaler = integrated_data['rul_scaler']
+            rul.rul_feature_names = integrated_data['rul_feature_names']
+            rul.rul_training_metadata = integrated_data['rul_metadata']
+
+            # Set up prediction functions
+            predict_function = tm.predict_condition
+            rul_predict_function = rul.predict_rul
+
+            log_message(f"Integrated model loaded: {selected_model.get()}")
+            log_message(f"Condition model type: {integrated_data.get('model_type', 'Unknown')}")
+            log_message(f"Integration date: {integrated_data.get('integration_timestamp', 'Unknown')}")
+
+        else:
+            # Fallback: try to load as regular condition model
+            tm.model = integrated_data.get('model')
+            tm.scaler = integrated_data.get('scaler')
+            tm.feature_names = integrated_data.get('feature_names', [])
+            tm.training_metadata = integrated_data.get('training_metadata', {})
+
+            predict_function = tm.predict_condition
+            rul_predict_function = None
+
+            log_message(f"Regular condition model loaded: {selected_model.get()}")
+            log_message("Note: No RUL prediction available with this model")
+
+        status_label.configure(text="Integrated model loaded successfully")
 
     except Exception as e:
-        log_message(f"Error loading condition model: {str(e)}")
-        status_label.configure(text="Error loading condition model")
+        log_message(f"Error loading integrated model: {str(e)}")
+        status_label.configure(text="Error loading integrated model")
 
 
-def load_rul_model():
-    """Load selected RUL model"""
-    global rul_predict_function
-
-    if not selected_rul_model.get():
-        messagebox.showerror("Error", "Please select a RUL model")
-        return
-
-    try:
-        status_label.configure(text="Loading RUL model...")
-
-        rul_model_path = os.path.join('res', 'model', selected_rul_model.get())
-        if not os.path.exists(rul_model_path):
-            raise FileNotFoundError(f"RUL model file not found: {rul_model_path}")
-
-        # Load RUL model
-        rul_predict_function = rul.init_rul_prediction(rul_model_path)
-
-        log_message(f"RUL model loaded: {selected_rul_model.get()}")
-        status_label.configure(text="RUL model loaded successfully")
-
-    except Exception as e:
-        log_message(f"Error loading RUL model: {str(e)}")
-        status_label.configure(text="Error loading RUL model")
-
-
-def run_test():
-    """Run complete analysis (condition + RUL)"""
+def run_integrated_test():
+    """Run integrated analysis (condition + RUL)"""
     if not test_file.get():
         messagebox.showerror("Error", "Please select a test file")
         return
@@ -684,36 +721,36 @@ def run_test():
         return
 
     if predict_function is None:
-        messagebox.showerror("Error", "Please load a condition model first")
+        messagebox.showerror("Error", "Please load an integrated model first")
         return
 
     try:
-        status_label.configure(text="Running analysis...")
+        status_label.configure(text="Running integrated analysis...")
 
         # Run condition prediction
         condition_result = predict_function(test_file.get())
 
-        # Run RUL prediction if model is loaded
+        # Run RUL prediction if available
         rul_result = None
         if rul_predict_function is not None:
             rul_result = rul_predict_function(test_file.get(), condition_result)
 
-        display_complete_results(condition_result, rul_result)
-        status_label.configure(text="Analysis completed")
+        display_integrated_results(condition_result, rul_result)
+        status_label.configure(text="Integrated analysis completed")
 
     except Exception as e:
-        log_message(f"Test error: {str(e)}")
-        status_label.configure(text="Test failed")
+        log_message(f"Integrated test error: {str(e)}")
+        status_label.configure(text="Integrated test failed")
 
 
-def display_complete_results(condition_result, rul_result=None):
-    """Display complete test results including RUL in results tab"""
+def display_integrated_results(condition_result, rul_result=None):
+    """Display complete integrated test results"""
     notebook.set("📋 Results")  # Switch to results tab
 
     results_content = f"""
-=== COMPLETE TOOL ANALYSIS ===
+=== INTEGRATED TOOL ANALYSIS ===
 File: {test_file.get()}
-Condition Model: {selected_model.get()}
+Model: {selected_model.get()}
 Analysis Time: {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 🔧 CONDITION ANALYSIS:
@@ -730,20 +767,19 @@ Detailed Probabilities:
     if rul_result:
         results_content += f"""
 ⏱️ REMAINING USEFUL LIFE (RUL):
-RUL Model: {selected_rul_model.get()}
 Estimated Remaining Time: {rul_result['rul_days']:.1f} days ({rul_result['rul_hours']:.0f} hours)
 Estimated Failure Date: {rul_result['estimated_failure_date']}
 Confidence Interval: {rul_result['confidence_interval_days'][0]:.1f} - {rul_result['confidence_interval_days'][1]:.1f} days
 Prediction Reliability: {rul_result['reliability_level']}
-Wear index: {rul_result['wear_index']}
+Wear Index: {rul_result['wear_index']:.4f}
 
-📋 MAINTENANCE RECOMMENDATIONS:
+📋 INTEGRATED MAINTENANCE RECOMMENDATIONS:
 """
         for rec in rul_result['recommendations']:
             results_content += f"• {rec}\n"
     else:
         results_content += f"""
-⏱️ RUL PREDICTION: Not available (no RUL model loaded)
+⏱️ RUL PREDICTION: Not available with this model
 
 📋 CONDITION-BASED RECOMMENDATIONS:
 """
@@ -754,6 +790,17 @@ Wear index: {rul_result['wear_index']}
 
     results_text.insert("end", results_content)
     results_text.see("end")
+
+
+def training_finished():
+    """Called when training is finished"""
+    global is_running
+
+    is_running = False
+    train_button.configure(state='normal')
+    progress_bar.set(1.0)
+    status_label.configure(text="Integrated training completed")
+    refresh_available_models()
 
 
 def plot_signal():

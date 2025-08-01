@@ -1,12 +1,12 @@
-#imports
+# imports
 import os
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pandas as pn
-from scipy.fft import fft,fftfreq
-from scipy.signal import butter,filtfilt
+from scipy.fft import fft, fftfreq
+from scipy.signal import butter, filtfilt
 from scipy.stats import skew, kurtosis
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -24,34 +24,35 @@ scaler = None
 feature_names = []
 training_metadata = {}
 
+
 def load_file(filename):
     try:
         file = pn.read_csv(filename, header=None, names=["t", "x", "y", "z"])
+        return file
+    except Exception as e:
+        print(f'Error Loading {filename}: {e}')
+        return None
+
+
+def load_features(filename):
+    try:
+        column_names = ['mean_x', 'std_x', 'rms_x', 'p2p_x', 'if_x', 'skewness_x', 'kurtosis_x',
+                        'crest_factor_x', 'shape_factor_x',
+                        'mean_y', 'std_y', 'rms_y', 'p2p_y', 'if_y', 'skewness_y', 'kurtosis_y',
+                        'crest_factor_y', 'shape_factor_y',
+                        'mean_z', 'std_z', 'rms_z', 'p2p_z', 'if_z', 'skewness_z', 'kurtosis_z',
+                        'crest_factor_z', 'shape_factor_z']
+        file = pn.read_csv(filename, header=None, names=column_names)
+
+        if not all(col in file.columns for col in column_names):
+            print(f"Error: CSV must contain columns: {column_names}")
+            return None
 
         return file
     except Exception as e:
         print(f'Error Loading {filename}: {e}')
         return None
 
-def load_features(filename):
-        try:
-            column_names = ['mean_x', 'std_x', 'rms_x', 'p2p_x', 'if_x', 'skewness_x', 'kurtosis_x',
-                                'crest_factor_x', 'shape_factor_x',
-                                'mean_y', 'std_y', 'rms_y', 'p2p_y', 'if_y', 'skewness_y', 'kurtosis_y',
-                                'crest_factor_y', 'shape_factor_y',
-                                'mean_z', 'std_z', 'rms_z', 'p2p_z', 'if_z', 'skewness_z', 'kurtosis_z',
-                                'crest_factor_z', 'shape_factor_z']
-            file = pn.read_csv(filename, header=None, names= column_names)
-
-
-            if not all(col in file.columns for col in column_names):
-                print(f"Error: CSV must contain columns: {column_names}")
-                return None
-
-            return file
-        except Exception as e:
-            print(f'Error Loading {filename}: {e}')
-            return None
 
 def get_folder_name(folderName):
     folder = folderName.lower()
@@ -66,7 +67,9 @@ def get_folder_name(folderName):
     else:
         return 'normal'
 
+
 def load_data_with_progress(folderPath, progress_callback=None):
+    """Load data with progress updates for integrated training"""
     allFiles = []
     failedFile = []
     featureList = []
@@ -83,6 +86,8 @@ def load_data_with_progress(folderPath, progress_callback=None):
 
     total_files = len(allFiles)
     start_time = time.time()
+
+    print(f"Processing {total_files} files for integrated training...")
 
     # Process with progress updates
     for i, (filePath, folderName) in enumerate(allFiles):
@@ -107,7 +112,11 @@ def load_data_with_progress(folderPath, progress_callback=None):
             print(f"Error processing {filePath}: {e}")
             failedFile.append(filePath)
 
+    if failedFile:
+        print(f"Warning: {len(failedFile)} files failed to process")
+
     return featureList, labels
+
 
 def load_data(folderPath):
     allFiles = []
@@ -116,7 +125,7 @@ def load_data(folderPath):
     labels = []
 
     for subfolder in os.listdir(folderPath):
-        subfolderPath = os.path.join(folderPath,subfolder)
+        subfolderPath = os.path.join(folderPath, subfolder)
 
         if os.path.isdir(subfolderPath):
             csvFiles = [f for f in os.listdir(subfolderPath) if f.endswith('.csv')]
@@ -125,7 +134,7 @@ def load_data(folderPath):
                 filePath = os.path.join(subfolderPath, filename)
                 allFiles.append((filePath, subfolder))
 
-    #Process
+    # Process
     for filePath, folderName in tqdm(allFiles, desc="Processing files"):
         try:
             # Load signal data
@@ -149,62 +158,77 @@ def load_data(folderPath):
     save_features(featureList)
     return featureList, labels
 
+
 def signal_FFT(data):
     windowed_signal = data * np.hanning(len(data))
     N = len(data)
-    fp = 1/20000
+    fp = 1 / 20000
     yf = fft(windowed_signal)
-    xf = fftfreq(N,fp)
+    xf = fftfreq(N, fp)
     positive_idx = xf >= 0
     frequencies = xf[positive_idx]
     magnitude = np.abs(yf[positive_idx])
 
-    return frequencies,magnitude
+    return frequencies, magnitude
+
 
 '''
-    Filtr do sygnału
-        data        = sygnal do filtracji
-        fs          = czest. probkowania
-        freqLimit   = czest. odciecia
-        filterType  = typ filtra // low lub lp - dolnoprzepustowy, high lub hp - gornoprzepustowy
-        order       = rzad filtra
+    Filter for signal
+        data        = signal to filter
+        fs          = sampling frequency
+        freqLimit   = cutoff frequency
+        filterType  = filter type // low or lp - lowpass, high or hp - highpass
+        order       = filter order
 '''
-def signal_filter(data,fs,freqLimit, filterType, order):
-    Wn = freqLimit/ (fs/2)
-    b,a = butter(order, Wn, btype=filterType, analog=False)
-    return filtfilt(b,a,data)
+
+
+def signal_filter(data, fs, freqLimit, filterType, order):
+    Wn = freqLimit / (fs / 2)
+    b, a = butter(order, Wn, btype=filterType, analog=False)
+    return filtfilt(b, a, data)
+
 
 def signal_normalization(data):
-    #return (data - np.min(data)) / (np.max(data) - np.min(data))
-    #return (data - np.mean(data)) / np.std(data)
+    # return (data - np.min(data)) / (np.max(data) - np.min(data))
+    # return (data - np.mean(data)) / np.std(data)
     return data / np.max(data)
+
 
 def signal_average(data):
     return np.mean(data)
 
+
 def signal_std_deviation(data):
     return np.std(data)
 
+
 def signal_RMS(data):
-    return  np.sqrt(signal_average(data**2))
+    return np.sqrt(signal_average(data ** 2))
+
 
 def signal_P2P(data):
     return np.max(data) - np.min(data)
 
+
 def signal_IF(data):
     return np.max(data) / signal_average(data)
 
+
 def signal_skewness(data):
-    return skew(data,axis=0,bias=True)
+    return skew(data, axis=0, bias=True)
+
 
 def signal_kurtosis(data):
-    return kurtosis(data,axis=0,bias=True)
+    return kurtosis(data, axis=0, bias=True)
+
 
 def signal_crestFactor(data):
     return abs(np.max(data)) / signal_RMS(data)
 
+
 def signal_shapeFactor(data):
-    return 1/signal_average(data)
+    return 1 / signal_average(data)
+
 
 def calculate_features(data, axis):
     features = {}
@@ -221,6 +245,7 @@ def calculate_features(data, axis):
 
     return features
 
+
 def process_signal(data):
     allFeatures = {}
     for axis in ['x', 'y', 'z']:
@@ -234,9 +259,11 @@ def process_signal(data):
 
     return allFeatures
 
+
 def moving_average(data, window_size=15):
     window = np.ones(window_size) / window_size
     return np.convolve(data, window, mode='same')
+
 
 def plot_axis_features(axis, featureList, labels):
     axis_features = {}
@@ -252,18 +279,17 @@ def plot_axis_features(axis, featureList, labels):
             for sample in featureList:
                 axis_features[Name].append(sample.get(Name, 0))
 
-    fig, axs = plt.subplots(3,3, figsize=(15,8), dpi=100)
+    fig, axs = plt.subplots(3, 3, figsize=(15, 8), dpi=100)
     axs = axs.flatten()
 
     startBear = labels.count('bearing')
     startMisal = startBear + labels.count('misalignment')
     startNorm = startMisal + labels.count('normal')
-    startUnbal =  startNorm + labels.count('unbalance')
+    startUnbal = startNorm + labels.count('unbalance')
     print(startBear)
     print(startNorm)
     print(startUnbal)
     print(startMisal)
-
 
     for i, (plotname, values) in enumerate(axis_features.items()):
         bearing = moving_average(values[:1000])
@@ -291,8 +317,8 @@ def plot_axis_features(axis, featureList, labels):
 
     return axis_features
 
-def plot_axis_features_from_file(fig, axis, feature, segment_size):
 
+def plot_axis_features_from_file(fig, axis, feature, segment_size):
     plotsNames = ['mean', 'std', 'rms', 'p2p', 'if', 'skewness', 'kurtosis', 'crest_factor', 'shape_factor']
     column_names = [f'{name}_{axis}' for name in plotsNames]
     data = feature[column_names]
@@ -325,12 +351,23 @@ def plot_axis_features_from_file(fig, axis, feature, segment_size):
     fig.legend(handles, labels, loc='lower center', ncol=4, fontsize='small', bbox_to_anchor=(0.5, 0))
     fig.suptitle(f'Porównanie cech dla osi {axis.upper()}', fontsize=16)
 
-def prepare_training_data(features, labels):
-    global scaler, feature_names
-    dfFeature = pd.DataFrame(features)
-    feature_names = dfFeature.columns.tolist();
 
+def prepare_training_data(features, labels):
+    """Prepare training data with improved error handling"""
+    global scaler, feature_names
+
+    print(f"Preparing training data for {len(features)} samples...")
+
+    dfFeature = pd.DataFrame(features)
+    feature_names = dfFeature.columns.tolist()
+
+    # Handle missing values
     dfFeature = dfFeature.fillna(dfFeature.mean())
+
+    # Check for any remaining issues
+    if dfFeature.isnull().any().any():
+        print("Warning: Still have NaN values after filling with mean")
+        dfFeature = dfFeature.fillna(0)
 
     scaler = StandardScaler()
     XScaled = scaler.fit_transform(dfFeature)
@@ -338,13 +375,17 @@ def prepare_training_data(features, labels):
     labelMap = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'bearing': 3}
     y = np.array([labelMap[label] for label in labels])
 
+    print(f"Features prepared: {len(feature_names)} features")
+    print(f"Label distribution: {dict(zip(*np.unique(y, return_counts=True)))}")
+
     return XScaled, y, feature_names
 
-def train_model(X,y, modelType='random_forest'):
 
+def train_model(X, y, modelType='random_forest'):
+    """Train model with improved logging for integration"""
     global model, training_metadata
 
-    print(f"Training {modelType} model.")
+    print(f"Training {modelType} model for integrated system...")
 
     # Split data for training and testing
     XTrain, XTest, yTrain, yTest = train_test_split(
@@ -359,8 +400,9 @@ def train_model(X,y, modelType='random_forest'):
             class_weight='balanced'  # Handle unbalanced classes
         )
         model.fit(XTrain, yTrain)
+
     elif modelType == 'svm':
-        param_grid ={
+        param_grid = {
             'C': [0.1, 1, 10, 100],
             'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
             'kernel': ['rbf', 'poly', 'sigmoid']
@@ -404,11 +446,12 @@ def train_model(X,y, modelType='random_forest'):
         training_metadata['best_params'] = grid_search.best_params_
         training_metadata['best_cv_score'] = grid_search.best_score_
 
-    print("Model Performance:")
+    print("Condition Model Performance:")
     print(classification_report(yTest, yPred,
                                 target_names=['normal', 'unbalance', 'misalignment', 'bearing']))
 
     return model
+
 
 def generate_unique_filename(base_path, extension):
     """Generate a unique filename by adding a counter if file exists"""
@@ -422,10 +465,20 @@ def generate_unique_filename(base_path, extension):
             return new_path
         counter += 1
 
-def save_features(data,filename):
-    df = pd.DataFrame(data).to_csv(f'{filename}.csv', index=None, header=None)
+
+def save_features(data, filename="features"):
+    """Save features to CSV with improved error handling"""
+    try:
+        df = pd.DataFrame(data)
+        output_path = f'{filename}.csv'
+        df.to_csv(output_path, index=None, header=None)
+        print(f"Features saved to {output_path}")
+    except Exception as e:
+        print(f"Error saving features: {e}")
+
 
 def save_model(filepath, feature_list, saveReadable=True):
+    """Save model with integration support"""
     global model, scaler, feature_names, training_metadata
 
     if model is None:
@@ -467,7 +520,7 @@ def save_model(filepath, feature_list, saveReadable=True):
     # Save PKL file (for deployment)
     with open(filepath, 'wb') as f:
         pickle.dump(model_data, f)
-    print(f"Model saved to {filepath}")
+    print(f"Condition model saved to {filepath}")
 
     if saveReadable:
         base_name = os.path.splitext(filepath)[0]
@@ -500,6 +553,7 @@ def save_model(filepath, feature_list, saveReadable=True):
             base_summary = os.path.splitext(original_summary_path)[0]
             summary_path = f"{base_summary}_{counter:03d}.txt"
             counter += 1
+
         with open(summary_path, 'w') as f:
             f.write("TOOL CONDITION MONITOR - MODEL SUMMARY\n")
             f.write("=" * 50 + "\n\n")
@@ -535,13 +589,16 @@ def save_model(filepath, feature_list, saveReadable=True):
                         f.write(f"  Support: {report[class_name]['support']}\n\n")
 
         print(f"Model summary saved to {summary_path}")
-        print(base_name)
 
-    save_features(feature_list,base_name)
+    # Save features for integrated system
+    if feature_list:
+        save_features(feature_list, base_name)
 
     return filepath
 
+
 def load_model(filepath=None):
+    """Load model with integration support"""
     global model, scaler, feature_names, training_metadata
 
     if filepath is None:
@@ -569,17 +626,23 @@ def load_model(filepath=None):
         feature_names = model_data['feature_names']
         training_metadata = model_data.get('training_metadata', {})
 
-        print(f"Model loaded from {filepath}")
+        print(f"Condition model loaded from {filepath}")
         print(f"Model type: {training_metadata.get('model_type', 'Unknown')}")
         print(f"Trained on: {training_metadata.get('training_date', 'Unknown')}")
         print(f"Features: {len(feature_names)}")
 
+        return True
+
     except FileNotFoundError:
         print(f"Model file {filepath} not found!")
+        return False
     except Exception as e:
         print(f"Error loading model: {e}")
+        return False
+
 
 def predict_condition(filepath):
+    """Predict condition with enhanced recommendations"""
     global model, scaler, feature_names
 
     if model is None:
@@ -602,31 +665,11 @@ def predict_condition(filepath):
     probabilities = model.predict_proba(X_scaled)[0]
 
     # Convert to readable format
-    condition_map = {0: 'normal', 1 : 'unbalance' , 2: 'misalignment' , 3 : 'bearing'}
+    condition_map = {0: 'normal', 1: 'unbalance', 2: 'misalignment', 3: 'bearing'}
     predicted_condition = condition_map[prediction]
 
-    # Generate recommendations
-    recommendations = []
-    if predicted_condition == 'normal':
-        recommendations = [
-            "DObra kondycja",
-        ]
-    elif predicted_condition == 'unbalance':
-        recommendations = [
-            "Łożysko wymaga sprawdzenia",
-            "Należy sprwadzić balans łożyska",
-            "wykonać kolejny pomiar za 1-2 tygodnie",
-        ]
-    elif predicted_condition == 'misalignment':
-        recommendations = [
-            "Łożysko wymaga sprawdzenia",
-            "Należy sprwadzić połączenia",
-            "wykonać kolejny pomiar za 1-2 tygodnie",
-        ]
-    elif predicted_condition == 'bearing':
-        recommendations = [
-            "Zepsute, natychmiastowa wymiana",
-        ]
+    # Generate enhanced recommendations
+    recommendations = generate_condition_recommendations(predicted_condition, probabilities)
 
     return {
         'condition': predicted_condition,
@@ -640,21 +683,75 @@ def predict_condition(filepath):
         'recommendations': recommendations,
     }
 
-def init_prediction(filepath=None):
-    load_model(filepath)
-    print("Model loaded and ready for predictions!")
 
-    # Return prediction function
-    return predict_condition
+def generate_condition_recommendations(condition, probabilities):
+    """Generate intelligent condition-based recommendations"""
+    recommendations = []
+    confidence = np.max(probabilities)
+
+    if condition == 'normal':
+        if confidence > 0.9:
+            recommendations = [
+                "Tool condition is excellent",
+                "Continue normal operation",
+                "Next inspection in 2-3 months"
+            ]
+        else:
+            recommendations = [
+                "Tool condition appears normal",
+                "Monitor for any changes",
+                "Consider more frequent inspections"
+            ]
+    elif condition == 'unbalance':
+        recommendations = [
+            "Unbalance detected in the tool",
+            "Check rotor balance and shaft alignment",
+            "Inspect coupling and mounting",
+            "Schedule balancing service"
+        ]
+        if confidence > 0.8:
+            recommendations.insert(1, "High confidence - immediate attention required")
+    elif condition == 'misalignment':
+        recommendations = [
+            "Shaft misalignment detected",
+            "Check shaft alignment with laser alignment tool",
+            "Verify foundation and mounting integrity",
+            "Inspect coupling for wear"
+        ]
+        if confidence > 0.8:
+            recommendations.insert(1, "High confidence - alignment correction needed")
+    elif condition == 'bearing':
+        recommendations = [
+            "Bearing fault detected - URGENT",
+            "Inspect bearing condition immediately",
+            "Check lubrication system",
+            "Plan for bearing replacement"
+        ]
+        if confidence > 0.7:
+            recommendations.insert(1, "CRITICAL: Consider immediate shutdown if essential")
+
+    return recommendations
+
+
+def init_prediction(filepath=None):
+    """Initialize prediction with integration support"""
+    success = load_model(filepath)
+    if success:
+        print("Condition model loaded and ready for predictions!")
+        return predict_condition
+    else:
+        return None
+
 
 def init_training(folderPath, model_type='random_forest'):
+    """Initialize training (legacy function for standalone use)"""
     feature_list, labels = load_data(folderPath)
 
     if len(feature_list) == 0:
         print("No data processed. Check your folder structure.")
         return
 
-        # Show dataset statistics
+    # Show dataset statistics
     label_counts = {label: labels.count(label) for label in set(labels)}
     print(f"Dataset statistics:")
     print(f"Total samples: {len(feature_list)}")
@@ -666,8 +763,30 @@ def init_training(folderPath, model_type='random_forest'):
 
     # Save the model with readable files
     model_filename = f'{model_type}/tool_monitor_{model_type}.pkl'
-    saved_filepath = save_model(model_filename, saveReadable=True)
-    print(f"Training complete! Model saved in res/model/{saved_filepath}")
+    saved_filepath = save_model(model_filename, feature_list, saveReadable=True)
+    print(f"Training complete! Model saved as {saved_filepath}")
+
+
+# Legacy functions for backward compatibility
+def get_model():
+    """Get current condition model"""
+    return model
+
+
+def get_scaler():
+    """Get current condition scaler"""
+    return scaler
+
+
+def get_feature_names():
+    """Get current condition feature names"""
+    return feature_names
+
+
+def get_training_metadata():
+    """Get current condition training metadata"""
+    return training_metadata
+
 
 def test_print():
     signal = load_file('res/balans_2.csv')
@@ -709,31 +828,10 @@ def test_print():
     plt.plot(zfreq, znorm)
     plt.grid()
 
-
+# Example usage (commented out for integration)
 # Main program
-
 # init_training('res/data2')
 # init_training('res/data','svm')
-
 # predict = init_prediction('res/model/random_forest/tool_monitor_random_forest.pkl')
 # result = predict('res/lozysko_2.csv')
 # print(result)
-# print("=========================")
-# predict = init_prediction('res/model/svm/tool_monitor_svm.pkl')
-# result = predict('res/lozysko_2.csv')
-# print(result)
-
-# features, labels = load_data('res/data')
-# save_features(features)
-
-# test_print()
-
-# features2 = load_features('res/features.csv')
-#
-# plot_axis_features_from_file('x',features2,'res/features.csv')
-# plot_axis_features_from_file('y',features2)
-# plot_axis_features_from_file('z',features2)
-#
-# plt.show()
-
-
