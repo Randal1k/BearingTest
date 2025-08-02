@@ -10,6 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import pandas as pd
 import numpy as np
+from PIL import Image, ImageTk
 
 import tool_monitor as tm
 import RUL as rul  # Import the new RUL module
@@ -100,6 +101,7 @@ def create_widgets():
     create_main_tab()
     create_visualization_tab()
     create_results_tab()
+    create_theory_tab()
 
 
 def create_guide_tab():
@@ -370,6 +372,7 @@ def create_visualization_tab():
     canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
 
 
+
 def create_results_tab():
     """Create the results tab for displaying outputs"""
     global results_text
@@ -459,6 +462,111 @@ def refresh_available_models():
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
 
+def create_theory_tab():
+    """Create the theory tab for explanations and visuals"""
+    theory_tab = notebook.add("📘 Theory")
+
+    # Scrollable frame
+    scrollable = ctk.CTkScrollableFrame(theory_tab, width=800, height=600)
+    scrollable.pack(fill="both", expand=True, padx=20, pady=20)
+
+    font_header = ctk.CTkFont(size=18, weight="bold")
+    font_text = ctk.CTkFont(size=13)
+
+    # Header
+    ctk.CTkLabel(scrollable, text="🧠 Theory: Algorithms and Data Flow", font=font_header).pack(anchor="w", pady=(10, 5))
+
+    # Random Forest
+    ctk.CTkLabel(scrollable, text="Random Forest (RF):", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable,
+        text="- Ensemble of decision trees\n"
+             "- Uses majority voting (classification) or averaging (regression)\n"
+             "- Handles noise and overfitting well",
+        font=font_text, justify="left").pack(anchor="w")
+
+    # SVM
+    ctk.CTkLabel(scrollable, text="Support Vector Machine (SVM):", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable,
+        text="- Finds optimal hyperplane that separates classes\n"
+             "- Uses kernel tricks to handle nonlinear data\n"
+             "- Effective for small and high-dimensional datasets",
+        font=font_text, justify="left").pack(anchor="w")
+
+    # Tool Condition Monitoring
+    ctk.CTkLabel(scrollable, text="Tool Condition Prediction Flow:", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable,
+        text="1. Load vibration signals (x, y, z)\n"
+             "2. Extract features (RMS, STD, skewness, etc.)\n"
+             "3. Use trained RF/SVM model to classify tool condition",
+        font=font_text, justify="left").pack(anchor="w")
+
+    # RUL Prediction
+    ctk.CTkLabel(scrollable, text="Remaining Useful Life (RUL) Prediction:", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable,
+        text="- Based on: Wiley (2023) https://doi.org/10.1155/2023/3742912\n"
+             "- Generates synthetic RUL from condition + wear index\n"
+             "- Trains regression model (Random Forest Regressor)\n"
+             "- Predicts RUL in days/hours",
+        font=font_text, justify="left").pack(anchor="w")
+
+    # Image Section (example placeholder)
+    ctk.CTkLabel(scrollable, text="Example: Data Flow Diagram", font=font_text).pack(anchor="w", pady=(20, 5))
+    try:
+        img = Image.open("res/images/flow_diagram.png")  # <- Wstaw swój obrazek tutaj
+        img = img.resize((600, 350))
+        img_tk = ImageTk.PhotoImage(img)
+        label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")  # tkinter label for image
+        label_img.image = img_tk
+        label_img.pack(pady=10)
+    except Exception as e:
+        ctk.CTkLabel(scrollable, text=f"[Image not loaded: {e}]", font=font_text, text_color="gray").pack(anchor="w")
+
+    # Footer
+    ctk.CTkLabel(scrollable,
+        text="This module integrates vibration-based fault diagnosis with machine learning models.\n"
+             "Use this tab to explain your methodology in reports or presentations.",
+        font=font_text, justify="left", text_color="gray").pack(anchor="w", pady=(20, 10))
+
+    # === Feature explanations below canvas ===
+
+    font_title = ctk.CTkFont(size=13, weight="bold")
+    font_text = ctk.CTkFont(size=11)
+
+    # List of features and corresponding image files
+    features_info = [
+        ("Mean (średnia):", "Średnia wartość sygnału. Pomaga wykrywać przesunięcia DC i asymetrie sygnału.", "mean.png"),
+        ("Standard deviation (odchylenie):", "Miara rozrzutu – wskazuje zmienność sygnału, wibracje losowe.", "std.png"),
+        ("RMS (root mean square):", "Energia sygnału – rośnie z poziomem zużycia.", "rms.png"),
+        ("Peak-to-Peak (P2P):", "Zakres wahań. Wysoka wartość oznacza skoki lub impulsy.", "p2p.png"),
+        ("Impulse Factor (IF):", "Wrażliwa na impulsy – np. uderzenia, luzy.", "if.png"),
+        ("Skewness (skośność):", "Miara asymetrii sygnału. Pomaga rozpoznać rodzaj uszkodzenia.", "skew.png"),
+        ("Kurtosis (kurtoza):", "Wysoka wartość oznacza obecność ostrych impulsów – typowe dla awarii łożysk.", "kurtosis.png"),
+        ("Crest Factor:", "Porównuje szczyt do RMS. Służy do wykrywania pojedynczych pików.", "crest.png"),
+        ("Shape Factor:", "Określa kształt przebiegu – np. czy wibracje są równomierne.", "shape.png"),
+    ]
+
+    image_refs = []
+
+    for name, desc, img_file in features_info:
+        label = ctk.CTkLabel(scrollable, text=f"• {name}", font=font_title, anchor="w", justify="left")
+        label.pack(anchor="w", padx=10, pady=(6, 0))
+
+        desc_label = ctk.CTkLabel(scrollable, text=desc, font=font_text, text_color="gray", wraplength=720,
+                                  justify="left")
+        desc_label.pack(anchor="w", padx=30)
+
+        try:
+            img_path = os.path.join("res/images/features", img_file)
+            img = Image.open(img_path)
+            img= img.resize((500,250))
+            img_tk = ImageTk.PhotoImage(img)
+            label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")
+            label_img.image = img_tk
+            label_img.pack(pady=10)
+        except Exception as e:
+            fallback = ctk.CTkLabel(scrollable, text=f"[Nie można załadować wzoru: {img_file}]",
+                                    text_color="gray", font=font_text)
+            fallback.pack(anchor="w", padx=30, pady=(0, 10))
 
 def count_csv_files(folder_path):
     """Count total CSV files in all subfolders"""
