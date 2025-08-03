@@ -20,10 +20,10 @@ Aplikacja umożliwia trenowanie modeli uczenia maszynowego do klasyfikacji stanu
    Dane powinny być zorganizowane tak:
 
    training_data/
-   ├── normal/
    ├── bearing/
-   ├── unbalance/
-   └── misalignment/
+   ├── misalignment/
+   ├── normal/
+   └── unbalance/
 
    Każdy plik CSV: kolumny t, x, y, z (czas + przyspieszenia w danych osiach)
 
@@ -104,8 +104,6 @@ Modele:
 • res/model/svm
 
 Dodatkowo:
-• Ważność cech: [model]_feature_importance.csv
-• Podsumowanie: [model]_summary.txt
 • Dziennik błędów: zakładka "Results"
 
 ═══════════════════════════════════════════════════════════

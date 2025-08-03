@@ -435,45 +435,48 @@ def create_theory_tab():
     font_text = ctk.CTkFont(size=13)
 
     # Header
-    ctk.CTkLabel(scrollable, text="🧠 Theory: Algorithms and Data Flow", font=font_header).pack(anchor="w", pady=(10, 5))
+    ctk.CTkLabel(scrollable, text="🧠 Teoria programu", font=font_header).pack(anchor="w", pady=(10, 5))
 
     # Random Forest
-    ctk.CTkLabel(scrollable, text="Random Forest (RF):", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="Random Forest", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="- Ensemble of decision trees\n"
-             "- Uses majority voting (classification) or averaging (regression)\n"
-             "- Handles noise and overfitting well",
+        text="Random Forest to metoda uczenia zespołowego oparta na wielu drzewach decyzyjnych. Każde drzewo jest trenowane na losowym podzbiorze danych i losowym zestawie cech, \n"
+             "co zapewnia różnorodność w modelu. Wynik końcowy jest uzyskiwany poprzez głosowanie większościowe (dla klasyfikacji) lub uśrednianie (dla regresji). Dzięki temu model\n"
+             " jest odporny na przeuczenie i dobrze radzi sobie z danymi o wysokiej zmienności. Sprawdza się w zadaniach detekcji anomalii i oceny stanu technicznego urządzeń. \n"
+             "Działa szybko i efektywnie nawet przy dużych zbiorach danych.",
         font=font_text, justify="left").pack(anchor="w")
 
     # SVM
     ctk.CTkLabel(scrollable, text="Support Vector Machine (SVM):", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="- Finds optimal hyperplane that separates classes\n"
-             "- Uses kernel tricks to handle nonlinear data\n"
-             "- Effective for small and high-dimensional datasets",
+        text="SVM to metoda uczenia maszynowego, która znajduje optymalną granicę decyzyjną (hiperpłaszczyznę), oddzielającą klasy danych z maksymalnym marginesem.\n"
+             " Działa dobrze w przestrzeniach o wysokiej wymiarowości i potrafi modelować nieliniowe zależności dzięki funkcjom jądra (kernelom). SVM jest skuteczny\n"
+             " przy niewielkiej liczbie próbek i dobrze sprawdza się w detekcji stanu anormalnego urządzeń. Model ten jest szczególnie użyteczny, gdy klasy są wyraźnie\n"
+             " oddzielne. Działa również w wersji regresyjnej jako SVR (Support Vector Regression).",
         font=font_text, justify="left").pack(anchor="w")
 
     # Tool Condition Monitoring
-    ctk.CTkLabel(scrollable, text="Tool Condition Prediction Flow:", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="Proces przewidywania kondycji:", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="1. Load vibration signals (x, y, z)\n"
-             "2. Extract features (RMS, STD, skewness, etc.)\n"
-             "3. Use trained RF/SVM model to classify tool condition",
+        text="Proces przewidywania kondycji zaczyna się od zbierania danych pomiarowych z czujników (np. wibracje, temperatura, dźwięk). Następnie dane te są \n"
+             "przetwarzane i opisywane za pomocą cech statystycznych (np. średnia, RMS). Kolejnym krokiem jest trening modelu predykcyjnego na danych historycznych, \n"
+             "gdzie znany jest stan urządzenia. Po wytrenowaniu, model otrzymuje nowe dane i określa aktualną kondycję urządzenia (np. normalna, zużyta, awaryjna). \n"
+             "Przewidywanie kondycji może być klasyfikacją (stan) lub regresją (wskaźnik zużycia). W niektórych przypadkach stosuje się również techniki prognozowania szeregów czasowych.",
         font=font_text, justify="left").pack(anchor="w")
 
     # RUL Prediction
-    ctk.CTkLabel(scrollable, text="Remaining Useful Life (RUL) Prediction:", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="Przewidywanie RUL (Remaining Useful Life)", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="- Based on: Wiley (2023) https://doi.org/10.1155/2023/3742912\n"
-             "- Generates synthetic RUL from condition + wear index\n"
-             "- Trains regression model (Random Forest Regressor)\n"
-             "- Predicts RUL in days/hours",
+        text="RUL to przewidywanie pozostałego czasu pracy urządzenia przed wystąpieniem awarii. Model uczony jest na danych historycznych urządzeń podobnego typu, \n"
+             "gdzie znany jest czas awarii. Często wykorzystuje się metody regresji, sieci neuronowe lub modele sekwencyjne (np. LSTM). Model przetwarza dane cech \n"
+             "z czujników i estymuje ile czasu (lub cykli) pozostało do końca życia technicznego. Predykcja RUL jest kluczowa w utrzymaniu predykcyjnym (predictive maintenance). \n"
+             "Wynik pozwala zaplanować naprawy lub wymiany z wyprzedzeniem.",
         font=font_text, justify="left").pack(anchor="w")
 
     # Image Section (example placeholder)
-    ctk.CTkLabel(scrollable, text="Example: Data Flow Diagram", font=font_text).pack(anchor="w", pady=(20, 5))
+    ctk.CTkLabel(scrollable, text="Diagram przetwarzania sygnału", font=font_text).pack(anchor="w", pady=(20, 5))
     try:
-        img = Image.open("res/images/flow_diagram.png")  # <- Wstaw swój obrazek tutaj
+        img = Image.open("res/images/img.png")  # <- Wstaw swój obrazek tutaj
         img = img.resize((600, 350))
         img_tk = ImageTk.PhotoImage(img)
         label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")  # tkinter label for image
@@ -484,26 +487,25 @@ def create_theory_tab():
 
     # Footer
     ctk.CTkLabel(scrollable,
-        text="This module integrates vibration-based fault diagnosis with machine learning models.\n"
-             "Use this tab to explain your methodology in reports or presentations.",
+        text=" ",
         font=font_text, justify="left", text_color="gray").pack(anchor="w", pady=(20, 10))
 
     # === Feature explanations below canvas ===
 
-    font_title = ctk.CTkFont(size=13, weight="bold")
-    font_text = ctk.CTkFont(size=11)
+    font_title = ctk.CTkFont(size=15, weight="bold")
+    font_text = ctk.CTkFont(size=13)
 
     # List of features and corresponding image files
     features_info = [
-        ("Mean (średnia):", "Średnia wartość sygnału. Pomaga wykrywać przesunięcia DC i asymetrie sygnału.", "mean.png"),
-        ("Standard deviation (odchylenie):", "Miara rozrzutu – wskazuje zmienność sygnału, wibracje losowe.", "std.png"),
-        ("RMS (root mean square):", "Energia sygnału – rośnie z poziomem zużycia.", "rms.png"),
-        ("Peak-to-Peak (P2P):", "Zakres wahań. Wysoka wartość oznacza skoki lub impulsy.", "p2p.png"),
-        ("Impulse Factor (IF):", "Wrażliwa na impulsy – np. uderzenia, luzy.", "if.png"),
-        ("Skewness (skośność):", "Miara asymetrii sygnału. Pomaga rozpoznać rodzaj uszkodzenia.", "skew.png"),
-        ("Kurtosis (kurtoza):", "Wysoka wartość oznacza obecność ostrych impulsów – typowe dla awarii łożysk.", "kurtosis.png"),
-        ("Crest Factor:", "Porównuje szczyt do RMS. Służy do wykrywania pojedynczych pików.", "crest.png"),
-        ("Shape Factor:", "Określa kształt przebiegu – np. czy wibracje są równomierne.", "shape.png"),
+        ("Mean (średnia):", "Określa przeciętną wartość sygnału. Wzrost może wskazywać na zmianę stanu pracy lub powolne zużycie.", "mean.png"),
+        ("Standard Deviation (odchylenie standardowe):","Mierzy rozproszenie sygnału. Wysokie odchylenie sugeruje niestabilność lub wibracje.", "std.png"),
+        ("RMS (Root Mean Square): ","Reprezentuje efektywną wartość sygnału. Jest czułe na wzrost amplitudy – przydatne do wykrywania zużycia mechanicznego.", "rms.png"),
+        ("Peak to Peak:","Różnica między maksymalnym a minimalnym wychyleniem. Ujawnia skoki i gwałtowne zmiany, charakterystyczne dla defektów.", "p2p.png"),
+        ("Impulse Factor:","Stosunek wartości maksymalnej do średniej z modułów sygnału. Wzrost może sugerować wystąpienie krótkich, ostrych impulsów (np. uszkodzenie łożyska).", "if.png"),
+        ("Skewness (skośność):","Wskazuje asymetrię rozkładu danych. Zmiana może sugerować przesunięcie charakterystyki pracy urządzenia.", "skew.png"),
+        ("Kurtosis (kurtoza): ","Informuje o „szczytowości” rozkładu. Wysoka kurtoza często wskazuje na impulsy (np. uderzenia lub pęknięcia).", "kurtosis.png"),
+        ("Crest Factor: ","Stosunek wartości szczytowej do RMS. Używany do wykrywania anomalii – wysoka wartość wskazuje na obecność szczytów.", "crest.png"),
+        ("Shape Factor: ","Stosunek RMS do wartości średniej. Służy do oceny kształtu sygnału – zmiany mogą wskazywać na nienaturalne zakłócenia w pracy maszyny.", "shape.png"),
     ]
 
     image_refs = []
@@ -512,14 +514,14 @@ def create_theory_tab():
         label = ctk.CTkLabel(scrollable, text=f"• {name}", font=font_title, anchor="w", justify="left")
         label.pack(anchor="w", padx=10, pady=(6, 0))
 
-        desc_label = ctk.CTkLabel(scrollable, text=desc, font=font_text, text_color="gray", wraplength=720,
+        desc_label = ctk.CTkLabel(scrollable, text=desc, font=font_text, text_color="white", wraplength=720,
                                   justify="left")
         desc_label.pack(anchor="w", padx=30)
 
         try:
             img_path = os.path.join("res/images/features", img_file)
             img = Image.open(img_path)
-            img= img.resize((500,250))
+            img= img.resize((100,50))
             img_tk = ImageTk.PhotoImage(img)
             label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")
             label_img.image = img_tk
