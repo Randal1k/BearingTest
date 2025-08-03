@@ -19,6 +19,8 @@ import time
 from sklearn.svm import SVC
 from tqdm import tqdm
 
+from config_loader import CONFIG, get_model_params, get_training_params, get_config_value
+
 model = None
 scaler = None
 feature_names = []
@@ -361,8 +363,15 @@ def prepare_training_data(features, labels):
     dfFeature = pd.DataFrame(features)
     feature_names = dfFeature.columns.tolist()
 
-    # Handle missing values
-    dfFeature = dfFeature.fillna(dfFeature.mean())
+    training_params = get_training_params()
+    fill_method = training_params['fill_na_method']
+
+    if fill_method == 'mean':
+        dfFeature = dfFeature.fillna(dfFeature.mean())
+    elif fill_method == 'median':
+        dfFeature = dfFeature.fillna(dfFeature.median())
+    elif fill_method == 'zero':
+        dfFeature = dfFeature.fillna(0)
 
     # Check for any remaining issues
     if dfFeature.isnull().any().any():
@@ -387,37 +396,43 @@ def train_model(X, y, modelType='random_forest'):
 
     print(f"Training {modelType} model for integrated system...")
 
+    training_params = get_training_params()
+
     # Split data for training and testing
     XTrain, XTest, yTrain, yTest = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y,
+        test_size=training_params['test_size'],
+        random_state=training_params['random_state'],
+        stratify=y if training_params['stratify'] else None
     )
 
     if modelType == 'random_forest':
-        model = RandomForestClassifier(
-            n_estimators=100,  # Number of trees
-            max_depth=10,  # Maximum tree depth
-            random_state=42,  # For reproducible results
-            class_weight='balanced'  # Handle unbalanced classes
-        )
+        rf_params = get_model_params('random_forest', 'classifier')
+        model = RandomForestClassifier(**rf_params)
         model.fit(XTrain, yTrain)
 
     elif modelType == 'svm':
+        svm_config = get_model_params('svm', 'classifier')
+        grid_search_config = svm_config.pop('grid_search')
+
+        svm_base = SVC(**svm_config)
+
         param_grid = {
-            'C': [0.1, 1, 10, 100],
-            'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
-            'kernel': ['rbf', 'poly', 'sigmoid']
+            'C': grid_search_config['C'],
+            'gamma': grid_search_config['gamma'],
+            'kernel': grid_search_config['kernel']
         }
-        svm_base = SVC(random_state=42, class_weight='balanced', probability=True)
 
         print("Performing grid search for optimal SVM parameters...")
         grid_search = GridSearchCV(
             svm_base,
             param_grid,
-            cv=5,
-            scoring='f1_macro',
-            n_jobs=-1,
-            verbose=1
+            cv=grid_search_config['cv'],
+            scoring=grid_search_config['scoring'],
+            n_jobs=grid_search_config['n_jobs'],
+            verbose=grid_search_config['verbose']
         )
+
         grid_search.fit(XTrain, yTrain)
         model = grid_search.best_estimator_
 
@@ -689,46 +704,18 @@ def generate_condition_recommendations(condition, probabilities):
     recommendations = []
     confidence = np.max(probabilities)
 
+    thresholds = get_config_value(CONFIG, 'prediction.confidence_thresholds')
+    condition_recs = get_config_value(CONFIG, f'recommendations.condition.{condition}')
+
     if condition == 'normal':
-        if confidence > 0.9:
-            recommendations = [
-                "Tool condition is excellent",
-                "Continue normal operation",
-                "Next inspection in 2-3 months"
-            ]
+        if confidence > thresholds['high']:
+            recommendations = condition_recs['high_confidence']
         else:
-            recommendations = [
-                "Tool condition appears normal",
-                "Monitor for any changes",
-                "Consider more frequent inspections"
-            ]
-    elif condition == 'unbalance':
-        recommendations = [
-            "Unbalance detected in the tool",
-            "Check rotor balance and shaft alignment",
-            "Inspect coupling and mounting",
-            "Schedule balancing service"
-        ]
-        if confidence > 0.8:
-            recommendations.insert(1, "High confidence - immediate attention required")
-    elif condition == 'misalignment':
-        recommendations = [
-            "Shaft misalignment detected",
-            "Check shaft alignment with laser alignment tool",
-            "Verify foundation and mounting integrity",
-            "Inspect coupling for wear"
-        ]
-        if confidence > 0.8:
-            recommendations.insert(1, "High confidence - alignment correction needed")
-    elif condition == 'bearing':
-        recommendations = [
-            "Bearing fault detected - URGENT",
-            "Inspect bearing condition immediately",
-            "Check lubrication system",
-            "Plan for bearing replacement"
-        ]
-        if confidence > 0.7:
-            recommendations.insert(1, "CRITICAL: Consider immediate shutdown if essential")
+            recommendations = condition_recs['low_confidence']
+    else:
+        recommendations = condition_recs['base'].copy()
+        if confidence > thresholds['medium']:
+            recommendations.insert(1, condition_recs['high_confidence_insert'])
 
     return recommendations
 

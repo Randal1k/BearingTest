@@ -14,6 +14,7 @@ from PIL import Image, ImageTk
 
 import tool_monitor as tm
 import RUL as rul  # Import the new RUL module
+from config_loader import CONFIG, get_gui_params, get_config_value
 
 # Set the appearance mode and default color theme
 ctk.set_appearance_mode("dark")  # Modes: "System" (standard), "Dark", "Light"
@@ -56,10 +57,18 @@ progress_value = 0.0
 def create_main_window():
     """Create and configure the main window"""
     global root
+
+    gui_params = get_gui_params()
+    window_config = gui_params['window']
+
     root = ctk.CTk()
-    root.title("Integrated Tool Condition Monitor with RUL Prediction")
-    root.geometry("1200x900")
-    root.minsize(1000, 700)
+    root.title(window_config['title'])
+    root.geometry(window_config['geometry'])
+    root.minsize(window_config['min_size'][0], window_config['min_size'][1])
+
+    # Set appearance from config
+    ctk.set_appearance_mode(gui_params['appearance_mode'])
+    ctk.set_default_color_theme(gui_params['color_theme'])
 
     initialize_variables()
     create_widgets()
@@ -115,54 +124,12 @@ def create_guide_tab():
     guide_text.pack(fill="both", expand=True, padx=15, pady=15)
 
     # Insert the comprehensive user guide
-    guide_content = """
-# INTEGRATED TOOL CONDITION MONITOR WITH RUL PREDICTION - USER GUIDE
-
-## Overview
-This application provides integrated tool condition monitoring and Remaining Useful Life (RUL) prediction.
-
-## Training Mode
-1. Select "Learning Mode"
-2. Choose model type (Random Forest or SVM)
-3. Select training data folder containing subfolders: normal, unbalance, misalignment, bearing
-4. Optionally provide a custom model name
-5. Click "🚀 Train Integrated Model" to train both condition and RUL models together
-
-The training will:
-- Train the condition classification model
-- Train the RUL regression model
-- Save both models in a single integrated file
-
-## Testing Mode
-1. Select "Testing Mode"
-2. Choose an integrated model file (.pkl)
-3. Click "📁 Load Integrated Model" to load both models
-4. Select a test data file (CSV format)
-5. Click "🧪 Run Complete Analysis" to get both condition and RUL predictions
-
-## Results
-The analysis provides:
-- Current tool condition (normal, unbalance, misalignment, bearing)
-- Confidence levels and probabilities
-- Remaining Useful Life estimate in days/hours
-- Estimated failure date
-- Maintenance recommendations
-
-## Signal Visualization
-Use the visualization tab to plot and analyze signal features for different axes (X, Y, Z).
-
-## File Structure
-- Training data: folder/condition_type/signal_files.csv
-- Models saved to: res/model/model_type/filename.pkl
-- Results and summaries automatically generated
-
-## Tips
-- Ensure CSV files have columns: t, x, y, z for signals
-- For consistent results, use the same model type for training and testing
-- Check the Results tab for detailed analysis outputs
-"""
-
-    guide_text.insert("1.0", guide_content)
+    try:
+        with open("res/guide.md", "r", encoding="utf-8") as f:
+            guide_content = f.read()
+        guide_text.insert("1.0", guide_content)
+    except FileNotFoundError:
+        guide_text.insert("1.0", "User guide file not found. Please ensure 'res/guide.md' exists.")
 
 
 def create_main_tab():
@@ -438,26 +405,20 @@ def browse_viz_file():
 def refresh_available_models():
     """Refresh the list of available integrated models"""
     try:
-        integrated_models = []
+        models = []
         model_dir = 'res/model'
-
         if os.path.exists(model_dir):
             for root_dir, dirs, files in os.walk(model_dir):
                 for file in files:
-                    # Look for integrated model files (those containing both condition and RUL)
-                    if file.endswith('.pkl') and '_integrated' in file:
+                    if file.endswith('.pkl'):
                         relative_path = os.path.relpath(os.path.join(root_dir, file), model_dir)
-                        integrated_models.append(relative_path)
-                    # Also include regular models for backward compatibility
-                    elif file.endswith('.pkl') and '_rul' not in file:
-                        relative_path = os.path.relpath(os.path.join(root_dir, file), model_dir)
-                        integrated_models.append(relative_path)
+                        models.append(relative_path)
 
         if model_combo:
-            model_combo.configure(values=integrated_models)
-            if integrated_models and not selected_model.get():
-                selected_model.set(integrated_models[0])
-                model_combo.set(integrated_models[0])
+            model_combo.configure(values=models)
+            if models and not selected_model.get():
+                selected_model.set(models[0])
+                model_combo.set(models[0])
 
     except Exception as e:
         log_message(f"Error refreshing models: {str(e)}")
@@ -640,7 +601,7 @@ def integrated_training_worker():
             custom_name = custom_model_name.get().strip()
             if custom_name.endswith('.pkl'):
                 custom_name = custom_name[:-4]
-            model_filename = f"{model_type.get()}/{custom_name}_integrated.pkl"
+            model_filename = f"{model_type.get()}/{custom_name}.pkl"
         else:
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M")
@@ -693,7 +654,7 @@ def integrated_training_worker():
         progress_value = 1.0
         root.event_generate("<<UpdateProgress>>", when="tail")
 
-        progress_bar.set(1.0)
+        training_finished()
         elapsed = time.time() - start_time
         update_status(f"✅ Done in {elapsed:.1f}s")
 
@@ -924,7 +885,8 @@ def plot_signal():
     try:
         fig.clear()
         # Set white background for plots
-        fig.patch.set_facecolor('white')
+        plot_config = get_config_value(CONFIG, 'gui.plots')
+        fig.patch.set_facecolor(plot_config['background_color'])
 
         # === LOAD FEATURES FROM FILE ===
         feature = tm.load_features(viz_file.get())

@@ -7,9 +7,11 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 import gc  # For garbage collection
+from config_loader import CONFIG, get_model_params, get_rul_params, get_config_value,get_training_params
 
 # Global variables for RUL prediction
 rul_model = None
@@ -26,15 +28,13 @@ def generate_synthetic_rul_data(feature_list, labels, time_horizon_days=365):
     rul_data = []
 
     # Define typical RUL ranges for each condition (in days)
-    rul_lookup = {
-        'normal': 330,
-        'unbalance': 150,
-        'misalignment': 90,
-        'bearing': 15
-    }
+    rul_params = get_rul_params()
+    rul_lookup = rul_params['base_rul_days']
+    max_severity_reduction = rul_params['max_severity_reduction']
+    min_rul_days = rul_params['min_rul_days']
 
     for features, label in zip(feature_list, labels):
-        base_rul = rul_lookup.get(label, 30)
+        base_rul = rul_lookup[label]
 
         # Wear calculation: higher RMS and STD indicate more wear
         rms_avg = np.mean([features.get(f'rms_{a}', 0) for a in 'xyz'])
@@ -113,26 +113,51 @@ def train_rul_model(X, y, model_type='random_forest', progress_callback=None):
         progress_callback(0.0, 1.0)
 
     from sklearn.model_selection import train_test_split
+    training_params = get_training_params()
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+        X, y,
+        test_size=training_params['test_size'],
+        random_state=training_params['random_state']
     )
 
     if model_type == 'random_forest':
-        from sklearn.ensemble import RandomForestRegressor
         print("[RUL] Training Random Forest with optimized settings...")
 
-        rul_model = RandomForestRegressor(
-            n_estimators=25,       # zmniejszona liczba drzew
-            max_depth=10,          # ograniczona głębokość
-            n_jobs=-1,             # wykorzystaj wszystkie rdzenie
-            verbose=2,             # pokaż każdy etap
-            random_state=42
-        )
-
+        rf_params = get_model_params('random_forest', 'regressor')
+        rul_model = RandomForestRegressor(**rf_params)
         rul_model.fit(X_train, y_train)
 
+        rul_model.fit(X_train, y_train)
+    elif model_type == 'svm':
+        # Grid search for SVM regression
+        svr_config = get_model_params('svm', 'regressor')
+        grid_search_config = svr_config.pop('grid_search')
+
+        svr_base = SVR(**svr_config)
+        param_grid = {
+            'C': grid_search_config['C'],
+            'gamma': grid_search_config['gamma'],
+            'epsilon': grid_search_config['epsilon']
+        }
+
+        print("Performing grid search for optimal SVR parameters...")
+
+        grid_search = GridSearchCV(
+            svr_base,
+            param_grid,
+            cv=grid_search_config['cv'],
+            scoring=grid_search_config['scoring'],
+            n_jobs=grid_search_config['n_jobs'],
+            verbose=grid_search_config['verbose']
+        )
+        grid_search.fit(X_train, y_train)
+        rul_model = grid_search.best_estimator_
+
+        print(f"Best SVR parameters: {grid_search.best_params_}")
+        print(f"Best cross-validation score: {-grid_search.best_score_:.2f} MAE")
     else:
-        raise ValueError("Only 'random_forest' is supported safely for large data.")
+        raise ValueError("Supported models: 'random_forest', 'svm'")
 
     # Ewaluacja
     from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -248,50 +273,29 @@ def generate_maintenance_recommendations(rul_days, condition_result=None):
     """Generate intelligent maintenance recommendations based on RUL and condition"""
     recommendations = []
 
-    # Base recommendations on RUL
-    if rul_days > 180:  # > 6 months
-        base_recs = [
-            "Tool in good condition",
-            "Continue regular monitoring",
-            "Next inspection in 1-2 months"
-        ]
-    elif rul_days > 90:  # 3-6 months
-        base_recs = [
-            "Plan maintenance within 2-3 months",
-            "Increase monitoring frequency",
-            "Check for early warning signs"
-        ]
-    elif rul_days > 30:  # 1-3 months
-        base_recs = [
-            "Schedule maintenance soon",
-            "Monitor weekly",
-            "Prepare replacement parts"
-        ]
-    else:  # < 1 month
-        base_recs = [
-            "URGENT: Schedule immediate maintenance",
-            "Tool may fail soon",
-            "Consider stopping operation if critical"
-        ]
+    rul_recs = get_config_value(CONFIG, 'recommendations.rul')
 
-    recommendations.extend(base_recs)
+    # Base recommendations on RUL
+    if rul_days > rul_recs['very_good']['threshold']:
+        recommendations.extend(rul_recs['very_good']['recommendations'])
+    elif rul_days > rul_recs['good']['threshold']:
+        recommendations.extend(rul_recs['good']['recommendations'])
+    elif rul_days > rul_recs['moderate']['threshold']:
+        recommendations.extend(rul_recs['moderate']['recommendations'])
+    else:
+        recommendations.extend(rul_recs['critical']['recommendations'])
 
     # Add condition-specific recommendations
     if condition_result:
         condition = condition_result['condition']
         confidence = condition_result['confidence']
 
-        if condition == 'unbalance' and confidence > 0.7:
-            recommendations.append("Check rotor balance and alignment")
-            recommendations.append("Inspect shaft coupling")
-        elif condition == 'misalignment' and confidence > 0.7:
-            recommendations.append("Check shaft alignment")
-            recommendations.append("Verify mounting and foundation")
-        elif condition == 'bearing' and confidence > 0.7:
-            recommendations.append("Inspect bearing condition immediately")
-            recommendations.append("Check lubrication system")
-            if rul_days > 30:  # Override RUL if bearing issues detected
-                recommendations.insert(0, "WARNING: Bearing issues detected - reduce RUL estimate")
+        integrated_recs = get_config_value(CONFIG, 'recommendations.integrated')
+
+        if condition in integrated_recs:
+            condition_config = integrated_recs[condition]
+            if confidence > condition_config['confidence_threshold']:
+                recommendations.extend(condition_config['additional'])
 
     return recommendations
 

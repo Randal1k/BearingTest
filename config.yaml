@@ -1,0 +1,329 @@
+# Tool Condition Monitor Configuration File
+# This file contains all configurable parameters for the tool monitoring system
+
+# Model Parameters
+models:
+  random_forest:
+    # RandomForestClassifier parameters
+    classifier:
+      n_estimators: 100
+      max_depth: 10
+      random_state: 42
+      class_weight: "balanced"
+      min_samples_split: 2
+      min_samples_leaf: 1
+      max_features: "sqrt"
+
+    # RandomForestRegressor parameters for RUL
+    regressor:
+      n_estimators: 25
+      max_depth: 10
+      random_state: 42
+      min_samples_split: 2
+      min_samples_leaf: 1
+      max_features: "sqrt"
+      n_jobs: -1
+      verbose: 2
+
+  svm:
+    # SVM Classifier parameters
+    classifier:
+      random_state: 42
+      class_weight: "balanced"
+      probability: True
+      # Grid search parameters
+      grid_search:
+        C: [0.1, 1, 10, 100]
+        gamma: ["scale", "auto", 0.001, 0.01, 0.1, 1]
+        kernel: ["rbf", "poly", "sigmoid"]
+        cv: 5
+        scoring: "f1_macro"
+        n_jobs: -1
+        verbose: 1
+
+    # SVR parameters for RUL
+    regressor:
+      kernel: "rbf"
+      # Grid search parameters
+      grid_search:
+        C: [0.1, 1, 10, 100]
+        gamma: ["scale", "auto", 0.001, 0.01, 0.1]
+        epsilon: [0.01, 0.1, 1.0]
+        cv: 5
+        scoring: "neg_mean_absolute_error"
+        n_jobs: -1
+        verbose: 1
+
+# RUL (Remaining Useful Life) Parameters
+rul:
+  # Base RUL values for each condition (in days)
+  base_rul_days:
+    normal: 330
+    unbalance: 150
+    misalignment: 90
+    bearing: 15
+
+  # RUL calculation parameters
+  time_horizon_days: 365
+  max_severity_reduction: 0.4  # Maximum RUL reduction due to wear (40%)
+  min_rul_days: 1
+
+  # Confidence interval parameters
+  confidence_multiplier: 1.96  # For 95% confidence interval
+  rf_high_confidence_threshold: 15  # Standard deviation threshold for high confidence
+  rf_medium_confidence_threshold: 40  # Standard deviation threshold for medium confidence
+  svm_default_mae: 25  # Default MAE for SVM confidence calculation
+
+# Signal Processing Parameters
+signal_processing:
+  # Sampling frequency
+  sampling_frequency: 20000
+
+  # Filter parameters
+  filter:
+    default_order: 4
+
+  # FFT parameters
+  fft:
+    window_type: "hanning"
+
+  # Moving average parameters
+  moving_average:
+    window_size: 15
+
+  # Feature extraction parameters
+  features:
+    axes: ["x", "y", "z"]
+    feature_types: ["mean", "std", "rms", "p2p", "if", "skewness", "kurtosis", "crest_factor", "shape_factor"]
+
+# Training Parameters
+training:
+  # Data splitting
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+  # Data preprocessing
+  fill_na_method: "mean"  # Options: "mean", "median", "zero"
+
+  # Progress update intervals
+  progress_update_interval: 10  # Update progress every N files
+
+# Prediction Parameters
+prediction:
+  # Confidence thresholds for recommendations
+  confidence_thresholds:
+    high: 0.9
+    medium: 0.8
+    low: 0.7
+
+  # Default values for missing features
+  default_feature_value: 0
+
+# Recommendations
+recommendations:
+  # Condition-based recommendations
+  condition:
+    normal:
+      high_confidence:
+        - "Tool condition is excellent"
+        - "Continue normal operation"
+        - "Next inspection in 2-3 months"
+      low_confidence:
+        - "Tool condition appears normal"
+        - "Monitor for any changes"
+        - "Consider more frequent inspections"
+
+    unbalance:
+      base:
+        - "Unbalance detected in the tool"
+        - "Check rotor balance and shaft alignment"
+        - "Inspect coupling and mounting"
+        - "Schedule balancing service"
+      high_confidence_insert: "High confidence - immediate attention required"
+
+    misalignment:
+      base:
+        - "Shaft misalignment detected"
+        - "Check shaft alignment with laser alignment tool"
+        - "Verify foundation and mounting integrity"
+        - "Inspect coupling for wear"
+      high_confidence_insert: "High confidence - alignment correction needed"
+
+    bearing:
+      base:
+        - "Bearing fault detected - URGENT"
+        - "Inspect bearing condition immediately"
+        - "Check lubrication system"
+        - "Plan for bearing replacement"
+      high_confidence_insert: "CRITICAL: Consider immediate shutdown if essential"
+
+  # RUL-based recommendations
+  rul:
+    very_good:  # > 180 days
+      threshold: 180
+      recommendations:
+        - "Tool in good condition"
+        - "Continue regular monitoring"
+        - "Next inspection in 1-2 months"
+
+    good:  # 90-180 days
+      threshold: 90
+      recommendations:
+        - "Plan maintenance within 2-3 months"
+        - "Increase monitoring frequency"
+        - "Check for early warning signs"
+
+    moderate:  # 30-90 days
+      threshold: 30
+      recommendations:
+        - "Schedule maintenance soon"
+        - "Monitor weekly"
+        - "Prepare replacement parts"
+
+    critical:  # < 30 days
+      threshold: 0
+      recommendations:
+        - "URGENT: Schedule immediate maintenance"
+        - "Tool may fail soon"
+        - "Consider stopping operation if critical"
+
+  # Integrated recommendations (RUL + Condition)
+  integrated:
+    unbalance:
+      confidence_threshold: 0.7
+      additional:
+        - "Check rotor balance and alignment"
+        - "Inspect shaft coupling"
+
+    misalignment:
+      confidence_threshold: 0.7
+      additional:
+        - "Check shaft alignment"
+        - "Verify mounting and foundation"
+
+    bearing:
+      confidence_threshold: 0.7
+      additional:
+        - "Inspect bearing condition immediately"
+        - "Check lubrication system"
+      rul_override_threshold: 30
+      rul_override_message: "WARNING: Bearing issues detected - reduce RUL estimate"
+
+# File and Directory Settings
+paths:
+  # Default directories
+  model_dir: "res/model"
+  data_dir: "res/data"
+  images_dir: "res/images"
+  guide_file: "res/guide.md"
+
+  # File extensions
+  model_extension: ".pkl"
+  data_extension: ".csv"
+
+  # Backup settings
+  create_backups: true
+  max_backups: 5
+
+# GUI Settings
+gui:
+  # Window settings
+  window:
+    title: "Integrated Tool Condition Monitor with RUL Prediction"
+    geometry: "1200x900"
+    min_size: [1000, 700]
+
+  # Theme settings
+  appearance_mode: "dark"  # "dark", "light", "system"
+  color_theme: "blue"  # "blue", "green", "dark-blue"
+
+  # Font settings
+  fonts:
+    default_size: 12
+    header_size: 16
+    code_size: 14
+    small_size: 10
+
+  # Progress bar settings
+  progress:
+    update_interval_ms: 100
+
+  # Plot settings
+  plots:
+    figure_size: [12, 8]
+    dpi: 100
+    background_color: "white"
+    grid_alpha: 0.7
+    grid_linestyle: "--"
+    grid_linewidth: 0.5
+
+# Memory Management
+memory:
+  # Large dataset threshold
+  large_dataset_threshold: 2000
+  chunk_size: 1000
+
+  # Garbage collection
+  enable_gc: true
+  gc_frequency: 100  # Run garbage collection every N processed files
+
+# Logging
+logging:
+  # Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Log format
+  format: "[%(asctime)s] %(levelname)s: %(message)s"
+  date_format: "%H:%M:%S"
+
+  # File logging
+  enable_file_logging: false
+  log_file: "tool_monitor.log"
+  max_log_size_mb: 10
+  backup_count: 3
+
+# Performance Settings
+performance:
+  # Threading
+  use_threading: true
+  max_workers: 4
+
+  # Processing
+  enable_multiprocessing: false  # Set to true for very large datasets
+  process_pool_size: 2
+
+  # Caching
+  enable_feature_caching: false
+  cache_dir: "cache"
+  cache_expiry_hours: 24
+
+# Validation Settings
+validation:
+  # Data validation
+  min_signal_length: 100
+  max_signal_length: 1000000
+
+  # Feature validation
+  feature_value_limits:
+    min: -1000
+    max: 1000
+
+  # Model validation
+  min_training_samples: 10
+  min_samples_per_class: 5
+
+# Export Settings
+export:
+  # Model export formats
+  save_readable_files: true
+  include_feature_importance: true
+  include_model_summary: true
+
+  # Report settings
+  include_timestamps: true
+  decimal_places: 3
+
+  # Image export
+  plot_export_dpi: 300
+  plot_export_format: "png"
