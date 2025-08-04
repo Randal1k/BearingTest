@@ -8,6 +8,7 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 import pandas as pd
 import numpy as np
 from PIL import Image, ImageTk
@@ -342,10 +343,24 @@ def create_visualization_tab():
 
 def create_results_tab():
     """Create the results tab for displaying outputs"""
-    global results_text
+    global results_text, fig_signal, fig_prob, canvas_signal, canvas_prob
 
     # Results tab
     results_tab = notebook.add("📋 Results")
+
+    # Frame for plots
+    plot_frame = ctk.CTkFrame(results_tab)
+    plot_frame.pack(fill="both", expand=False, padx=10, pady=(10, 0))
+
+    # Signal plot
+    fig_signal = Figure(figsize=(5, 3), dpi=100)
+    canvas_signal = FigureCanvasTkAgg(fig_signal, plot_frame)
+    canvas_signal.get_tk_widget().pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
+    # Probability plot
+    fig_prob = Figure(figsize=(5, 3), dpi=100)
+    canvas_prob = FigureCanvasTkAgg(fig_prob, plot_frame)
+    canvas_prob.get_tk_widget().pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
     # Results display
     results_text = ctk.CTkTextbox(results_tab, wrap="word", height=450, width=750,
@@ -401,6 +416,94 @@ def browse_viz_file():
     if file:
         viz_file.set(file)
 
+def compute_wear_curve(t, wear_start, rul, severity=1.0):
+    t = np.array(t)
+    norm_time = np.clip(t / rul, 0, 1)
+    curve = wear_start + (1.0 - wear_start) * (norm_time ** (1 / severity))
+    return np.clip(curve * 100, 0, 100)
+
+def update_results_plots(filepath, condition_result, rul_result):
+    try:
+        df = tm.load_file(filepath)
+        if df is None:
+            return
+
+        t = df["t"]
+        signal = df["x"]
+
+        # === WYKRES SYGNAŁU ===
+        fig_signal.clear()
+        ax1 = fig_signal.add_subplot(111)
+        ax1.plot(t, signal, color="steelblue")
+        ax1.set_title("Surowy sygnał (oś X)")
+        ax1.set_xlabel("Czas [s]")
+        ax1.set_ylabel("Amplituda")
+        fig_signal.tight_layout()
+        canvas_signal.draw()
+
+        # === WYKRES ZUŻYCIA ===
+        fig_prob.clear()
+        ax2 = fig_prob.add_subplot(111)
+
+        rul_days = rul_result['rul_days']
+        wear_now = np.clip(rul_result.get("wear_index", 0.3), 0.01, 0.99)
+        total_time = rul_days * 1.5
+        time = np.linspace(0, total_time, 300)
+
+        # Trzy scenariusze
+        scenarios = [
+            ("Łagodny", 0.7, "green"),
+            ("Średni", 1.0, "orange"),
+            ("Agresywny", 1.5, "red")
+        ]
+
+        for label, severity, color in scenarios:
+            curve = compute_wear_curve(time, wear_now, rul_days, severity)
+            ax2.plot(time, curve, label=f"{label} scenariusz", color=color)
+
+        failure_day = rul_days
+        ax2.plot(failure_day, 1.0, "ro", label=f"Awaria ≈ {failure_day:.1f} dni")
+        ax2.axvline(x=failure_day, color="red", linestyle="--", alpha=0.5)
+
+        # ✅ Punkt sugerowanego testu: połowa RUL
+        next_check = rul_days * 0.5
+        wear_at_check = compute_wear_curve(np.array([next_check]), wear_now, rul_days, 1.0)[0]
+        ax2.plot(next_check, wear_at_check, "go", label=f"Test: {next_check:.1f} dni")
+        ax2.axvline(x=next_check, color='green', linestyle='--', alpha=0.3)
+
+        # ⚠️ Poziomy alarmowe
+        ax2.axhline(y=60, color="yellow", linestyle="--", alpha=0.5)
+        ax2.axhline(y=80, color="orange", linestyle="--", alpha=0.5)
+        ax2.axhline(y=95, color="red", linestyle="--", alpha=0.5)
+
+        # Skala i opisy
+        ax2.set_ylim([0, 105])
+        ax2.set_ylabel("Zużycie [%]")
+        ax2.set_yticks([0, 20, 40, 60, 80, 100])
+        ax2.set_yticklabels([f"{v}%" for v in [0, 20, 40, 60, 80, 100]])
+        ax2.set_xlim([0, total_time])
+        ax2.set_xlabel("Dni")
+        ax2.set_ylabel("Indeks zużycia")
+        ax2.set_title("Scenariusze zużycia łożyska w czasie")
+
+        custom_lines = [
+            Line2D([0], [0], color='green', lw=2, label='Scenariusz łagodny'),
+            Line2D([0], [0], color='orange', lw=2, label='Scenariusz średni'),
+            Line2D([0], [0], color='red', lw=2, label='Scenariusz agresywny'),
+            Line2D([0], [0], linestyle='--', color='gray', lw=1.2, label='Poziomy graniczne zużycia'),
+            Line2D([0], [0], color='black', lw=0, marker='o', markerfacecolor='red', label='Punkt awarii'),
+            Line2D([0], [0], color='black', lw=0, marker='o', markerfacecolor='green', label='Test kontrolny'),
+        ]
+
+        # wyświetlenie legendy pod wykresem z większym odstępem
+        ax2.legend(handles=custom_lines, fontsize=9, loc='lower center', bbox_to_anchor=(0.5, -0.7),
+                   ncol=2, frameon=False)
+        fig_prob.subplots_adjust(bottom=0.40)  # więcej przestrzeni na legendę
+        fig_prob.tight_layout()
+        canvas_prob.draw()
+
+    except Exception as e:
+        print(f"Plot error: {e}")
 
 def refresh_available_models():
     """Refresh the list of available integrated models"""
@@ -806,6 +909,8 @@ def run_integrated_test():
         if rul_predict_function is not None:
             rul_result = rul_predict_function(test_file.get(), condition_result)
 
+        clear_results()
+        update_results_plots(test_file.get(), condition_result, rul_result)
         display_integrated_results(condition_result, rul_result)
         status_label.configure(text="Integrated analysis completed")
 
