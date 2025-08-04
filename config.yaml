@@ -126,89 +126,89 @@ recommendations:
   condition:
     normal:
       high_confidence:
-        - "Tool condition is excellent"
-        - "Continue normal operation"
-        - "Next inspection in 2-3 months"
+        - "Stan narzędzia jest doskonały"
+        - "Kontynuuj normalną pracę"
+        - "Następna inspekcja za 2-3 miesiące"
       low_confidence:
-        - "Tool condition appears normal"
-        - "Monitor for any changes"
-        - "Consider more frequent inspections"
+        - "Stan narzędzia wydaje się normalny"
+        - "Monitoruj pod kątem zmian"
+        - "Rozważ częstsze inspekcje"
 
     unbalance:
       base:
-        - "Unbalance detected in the tool"
-        - "Check rotor balance and shaft alignment"
-        - "Inspect coupling and mounting"
-        - "Schedule balancing service"
-      high_confidence_insert: "High confidence - immediate attention required"
+        - "Wykryto niewyważenie narzędzia"
+        - "Sprawdź wyważenie wirnika i osiowość wału"
+        - "Skontroluj sprzęgło i mocowanie"
+        - "Zaplanuj usługę wyważania"
+      high_confidence_insert: "Wysokie zaufanie – wymagana natychmiastowa interwencja"
 
     misalignment:
       base:
-        - "Shaft misalignment detected"
-        - "Check shaft alignment with laser alignment tool"
-        - "Verify foundation and mounting integrity"
-        - "Inspect coupling for wear"
-      high_confidence_insert: "High confidence - alignment correction needed"
+        - "Wykryto nieosiowość wału"
+        - "Sprawdź osiowość wału za pomocą narzędzia laserowego"
+        - "Zweryfikuj stan fundamentu i mocowania"
+        - "Sprawdź sprzęgło pod kątem zużycia"
+      high_confidence_insert: "Wysokie zaufanie – konieczna korekta osiowości"
 
     bearing:
       base:
-        - "Bearing fault detected - URGENT"
-        - "Inspect bearing condition immediately"
-        - "Check lubrication system"
-        - "Plan for bearing replacement"
-      high_confidence_insert: "CRITICAL: Consider immediate shutdown if essential"
+        - "Wykryto uszkodzenie łożyska – PILNE"
+        - "Natychmiast sprawdź stan łożyska"
+        - "Skontroluj układ smarowania"
+        - "Zaplanuj wymianę łożyska"
+      high_confidence_insert: "KRYTYCZNE: Rozważ natychmiastowe zatrzymanie, jeśli to konieczne"
 
   # RUL-based recommendations
   rul:
     very_good:  # > 180 days
       threshold: 180
       recommendations:
-        - "Tool in good condition"
-        - "Continue regular monitoring"
-        - "Next inspection in 1-2 months"
+        - "Narzędzie w dobrym stanie"
+        - "Kontynuuj regularne monitorowanie"
+        - "Następna inspekcja za 1-2 miesiące"
 
     good:  # 90-180 days
       threshold: 90
       recommendations:
-        - "Plan maintenance within 2-3 months"
-        - "Increase monitoring frequency"
-        - "Check for early warning signs"
+        - "Zaplanuj konserwację w ciągu 2-3 miesięcy"
+        - "Zwiększ częstotliwość monitorowania"
+        - "Sprawdzaj oznaki wczesnych usterek"
 
     moderate:  # 30-90 days
       threshold: 30
       recommendations:
-        - "Schedule maintenance soon"
-        - "Monitor weekly"
-        - "Prepare replacement parts"
+        - "Zaplanuj konserwację w najbliższym czasie"
+        - "Monitoruj co tydzień"
+        - "Przygotuj części zamienne"
 
     critical:  # < 30 days
       threshold: 0
       recommendations:
-        - "URGENT: Schedule immediate maintenance"
-        - "Tool may fail soon"
-        - "Consider stopping operation if critical"
+        - "PILNE: Zaplanuj natychmiastową konserwację"
+        - "Narzędzie może wkrótce ulec awarii"
+        - "Rozważ zatrzymanie pracy, jeśli to krytyczne"
 
   # Integrated recommendations (RUL + Condition)
   integrated:
     unbalance:
       confidence_threshold: 0.7
       additional:
-        - "Check rotor balance and alignment"
-        - "Inspect shaft coupling"
+        - "Sprawdź wyważenie i osiowość wirnika"
+        - "Skontroluj sprzęgło wału"
 
     misalignment:
       confidence_threshold: 0.7
       additional:
-        - "Check shaft alignment"
-        - "Verify mounting and foundation"
+        - "Sprawdź osiowość wału"
+        - "Zweryfikuj mocowanie i fundament"
 
     bearing:
       confidence_threshold: 0.7
       additional:
-        - "Inspect bearing condition immediately"
-        - "Check lubrication system"
+        - "Natychmiast sprawdź stan łożyska"
+        - "Skontroluj układ smarowania"
       rul_override_threshold: 30
-      rul_override_message: "WARNING: Bearing issues detected - reduce RUL estimate"
+      rul_override_message: "OSTRZEŻENIE: Wykryto problemy z łożyskiem – zmniejsz prognozowany czas eksploatacji"
 
 # File and Directory Settings
 paths:
