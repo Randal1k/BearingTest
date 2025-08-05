@@ -416,10 +416,22 @@ def browse_viz_file():
     if file:
         viz_file.set(file)
 
-def compute_wear_curve(t, wear_start, rul, severity=1.0):
+def compute_wear_curve(t, wear_start, rul, severity=1.0, mode="power"):
     t = np.array(t)
     norm_time = np.clip(t / rul, 0, 1)
-    curve = wear_start + (1.0 - wear_start) * (norm_time ** (1 / severity))
+
+    if mode == "power":
+        curve = wear_start + (1.0 - wear_start) * (norm_time ** (1 / severity))
+    elif mode == "sigmoid":
+        k = 10 * severity  # im większy severity, tym ostrzejszy wzrost
+        curve = wear_start + (1.0 - wear_start) * (1 / (1 + np.exp(-k * (norm_time - 0.5))))
+    elif mode == "exponential":
+        curve = wear_start + (1.0 - wear_start) * (np.exp(norm_time * severity) - 1) / (np.exp(severity) - 1)
+    elif mode == "logarithmic":
+        curve = wear_start + (1.0 - wear_start) * np.log(1 + norm_time * (np.exp(severity) - 1)) / np.log(np.exp(severity))
+    else:  # fallback
+        curve = wear_start + (1.0 - wear_start) * norm_time
+
     return np.clip(curve * 100, 0, 100)
 
 def update_results_plots(filepath, condition_result, rul_result):
@@ -450,25 +462,42 @@ def update_results_plots(filepath, condition_result, rul_result):
         total_time = rul_days * 1.5
         time = np.linspace(0, total_time, 300)
 
-        # Trzy scenariusze
+        mode_map = {
+            "normal": "power",
+            "unbalance": "logarithmic",
+            "misalignment": "logarithmic",
+            "bearing": "logarithmic"
+        }
+        print("condition_result:", condition_result)
+        condition_label = condition_result.get("condition", "").lower()
+        mode = mode_map.get(condition_label, "power")
+
+        severity_map = {
+            "normal": 0.8,
+            "unbalance": 1.4,
+            "misalignment": 2.2,
+            "bearing": 3
+        }
+        base_severity = severity_map.get(condition_label)
         scenarios = [
-            ("Łagodny", 0.7, "green"),
-            ("Średni", 1.0, "orange"),
-            ("Agresywny", 1.5, "red")
+            ("łagodny", base_severity * 0.5, "green"),
+            ("średni", base_severity, "orange"),
+            ("agresywny", base_severity * 2, "red")
         ]
 
-        for label, severity, color in scenarios:
-            curve = compute_wear_curve(time, wear_now, rul_days, severity)
+        for label, scenario_severity, color in scenarios:
+            curve = compute_wear_curve(time, wear_now, rul_days, scenario_severity, mode)
             ax2.plot(time, curve, label=f"{label} scenariusz", color=color)
 
+        print("RUL:", rul_days, "wear_now:", wear_now, "mode:", mode)
+
         failure_day = rul_days
-        ax2.plot(failure_day, 1.0, "ro", label=f"Awaria ≈ {failure_day:.1f} dni")
+        ax2.plot(failure_day, 100.0, "ro", label=f"Awaria ≈ {failure_day:.1f} dni")
         ax2.axvline(x=failure_day, color="red", linestyle="--", alpha=0.5)
 
         # ✅ Punkt sugerowanego testu: połowa RUL
         next_check = rul_days * 0.5
         wear_at_check = compute_wear_curve(np.array([next_check]), wear_now, rul_days, 1.0)[0]
-        ax2.plot(next_check, wear_at_check, "go", label=f"Test: {next_check:.1f} dni")
         ax2.axvline(x=next_check, color='green', linestyle='--', alpha=0.3)
 
         # ⚠️ Poziomy alarmowe
@@ -491,8 +520,8 @@ def update_results_plots(filepath, condition_result, rul_result):
             Line2D([0], [0], color='orange', lw=2, label='Scenariusz średni'),
             Line2D([0], [0], color='red', lw=2, label='Scenariusz agresywny'),
             Line2D([0], [0], linestyle='--', color='gray', lw=1.2, label='Poziomy graniczne zużycia'),
-            Line2D([0], [0], color='black', lw=0, marker='o', markerfacecolor='red', label='Punkt awarii'),
-            Line2D([0], [0], color='black', lw=0, marker='o', markerfacecolor='green', label='Test kontrolny'),
+            Line2D([0], [0], linestyle='--', color='green', lw=1.2, label='Proponowany kolejny test'),
+            Line2D([0], [0], color='black', lw=0, marker='o', markerfacecolor='red', label='Punkt awarii')
         ]
 
         # wyświetlenie legendy pod wykresem z większym odstępem
