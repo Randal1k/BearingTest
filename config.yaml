@@ -61,7 +61,7 @@ rul:
     normal: 330
     unbalance: 150
     misalignment: 90
-    bearing: 15
+    wearing: 15
 
   # RUL calculation parameters
   time_horizon_days: 365
@@ -150,7 +150,7 @@ recommendations:
         - "Sprawdź sprzęgło pod kątem zużycia"
       high_confidence_insert: "Wysokie zaufanie – konieczna korekta osiowości"
 
-    bearing:
+    wearing:
       base:
         - "Wykryto uszkodzenie łożyska – PILNE"
         - "Natychmiast sprawdź stan łożyska"
@@ -202,7 +202,7 @@ recommendations:
         - "Sprawdź osiowość wału"
         - "Zweryfikuj mocowanie i fundament"
 
-    bearing:
+    wearing:
       confidence_threshold: 0.7
       additional:
         - "Natychmiast sprawdź stan łożyska"

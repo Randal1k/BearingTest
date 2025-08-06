@@ -85,7 +85,7 @@ def prepare_rul_training_data(features, labels, rul_targets):
 
     # Add condition as a feature (encode labels)
     print("Encoding condition labels...")
-    label_map = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'bearing': 3}
+    label_map = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'wearing': 3}
     condition_encoded = np.array([label_map[label] for label in labels])
     df_features['condition'] = condition_encoded
     rul_feature_names.append('condition')
@@ -220,7 +220,7 @@ def predict_rul(filepath, condition_result=None):
 
     # Add condition as feature if provided
     if condition_result:
-        condition_map = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'bearing': 3}
+        condition_map = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'wearing': 3}
         condition_encoded = condition_map.get(condition_result['condition'], 0)
     else:
         # Default to normal if no condition provided
@@ -326,7 +326,7 @@ def load_rul_training_data(folder_path, progress_callback=None):
     print(
         f"  Misalignment tools: {np.mean([rul for rul, label in zip(rul_targets, labels) if label == 'misalignment']):.1f} days avg")
     print(
-        f"  Bearing issues: {np.mean([rul for rul, label in zip(rul_targets, labels) if label == 'bearing']):.1f} days avg")
+        f"  Wearing issues: {np.mean([rul for rul, label in zip(rul_targets, labels) if label == 'wearing']):.1f} days avg")
 
     return feature_list, labels, rul_targets
 

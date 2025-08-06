@@ -353,12 +353,12 @@ def create_results_tab():
     plot_frame.pack(fill="both", expand=False, padx=10, pady=(10, 0))
 
     # Signal plot
-    fig_signal = Figure(figsize=(5, 3), dpi=100)
+    fig_signal = Figure(figsize=(5, 4), dpi=100)
     canvas_signal = FigureCanvasTkAgg(fig_signal, plot_frame)
     canvas_signal.get_tk_widget().pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
     # Probability plot
-    fig_prob = Figure(figsize=(5, 3), dpi=100)
+    fig_prob = Figure(figsize=(5, 4), dpi=100)
     canvas_prob = FigureCanvasTkAgg(fig_prob, plot_frame)
     canvas_prob.get_tk_widget().pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
@@ -443,13 +443,26 @@ def update_results_plots(filepath, condition_result, rul_result):
         t = df["t"]
         signal = df["x"]
 
+        xfreq, xmag = tm.signal_FFT(signal)
+
         # === WYKRES SYGNAŁU ===
         fig_signal.clear()
-        ax1 = fig_signal.add_subplot(111)
+        ax1 = fig_signal.add_subplot(211)
         ax1.plot(t, signal, color="steelblue")
         ax1.set_title("Surowy sygnał (oś X)")
         ax1.set_xlabel("Czas [s]")
         ax1.set_ylabel("Amplituda")
+        ax1.grid()
+        fig_signal.tight_layout()
+
+        ax1 = fig_signal.add_subplot(212)
+        ax1.plot(xfreq, xmag, color="steelblue")
+        ax1.set_title("Transformata Fouriera")
+        ax1.set_xlabel("Częstotliwość [Hz]")
+        ax1.set_ylabel("Amplituda")
+        ax1.grid()
+        ax1.set_xlim(0,1000)
+
         fig_signal.tight_layout()
         canvas_signal.draw()
 
@@ -466,7 +479,7 @@ def update_results_plots(filepath, condition_result, rul_result):
             "normal": "power",
             "unbalance": "logarithmic",
             "misalignment": "logarithmic",
-            "bearing": "logarithmic"
+            "wearing": "logarithmic"
         }
         print("condition_result:", condition_result)
         condition_label = condition_result.get("condition", "").lower()
@@ -476,7 +489,7 @@ def update_results_plots(filepath, condition_result, rul_result):
             "normal": 0.8,
             "unbalance": 1.4,
             "misalignment": 2.2,
-            "bearing": 3
+            "wearing": 3
         }
         base_severity = severity_map.get(condition_label)
         scenarios = [
@@ -525,9 +538,9 @@ def update_results_plots(filepath, condition_result, rul_result):
         ]
 
         # wyświetlenie legendy pod wykresem z większym odstępem
-        ax2.legend(handles=custom_lines, fontsize=9, loc='lower center', bbox_to_anchor=(0.5, -0.7),
+        ax2.legend(handles=custom_lines, fontsize=9, loc='lower center', bbox_to_anchor=(0.5, -0.5),
                    ncol=2, frameon=False)
-        fig_prob.subplots_adjust(bottom=0.40)  # więcej przestrzeni na legendę
+        fig_prob.subplots_adjust(bottom=0.3)  # więcej przestrzeni na legendę
         fig_prob.tight_layout()
         canvas_prob.draw()
 
@@ -567,46 +580,66 @@ def create_theory_tab():
     font_text = ctk.CTkFont(size=13)
 
     # Header
-    ctk.CTkLabel(scrollable, text="🧠 Teoria programu", font=font_header).pack(anchor="w", pady=(10, 5))
+    ctk.CTkLabel(scrollable, text="Jak działa system predykcji uszkodzeń łożyska", font=font_header).pack(anchor="w", pady=(10, 5))
 
     # Random Forest
-    ctk.CTkLabel(scrollable, text="Random Forest", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="1. Wczytanie danych pomiarowych", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="Random Forest to metoda uczenia zespołowego oparta na wielu drzewach decyzyjnych. Każde drzewo jest trenowane na losowym podzbiorze danych i losowym zestawie cech, \n"
-             "co zapewnia różnorodność w modelu. Wynik końcowy jest uzyskiwany poprzez głosowanie większościowe (dla klasyfikacji) lub uśrednianie (dla regresji). Dzięki temu model\n"
-             " jest odporny na przeuczenie i dobrze radzi sobie z danymi o wysokiej zmienności. Sprawdza się w zadaniach detekcji anomalii i oceny stanu technicznego urządzeń. \n"
-             "Działa szybko i efektywnie nawet przy dużych zbiorach danych.",
+        text="System rozpoczyna pracę od wczytania pliku CSV z sygnałem czasowym zarejestrowanym przez czujniki drgań. Sygnał przedstawia zmiany amplitudy \n"
+             "drgań w funkcji czasu, co jest podstawą do dalszej analizy. Użytkownik wybiera plik wejściowy, a dane są wizualizowane w formie wykresu. Jest to \n"
+             "pierwszy etap diagnostyki, który pozwala wychwycić anomalię gołym okiem oraz upewnić się, że dane zostały poprawnie załadowane.",
         font=font_text, justify="left").pack(anchor="w")
 
     # SVM
-    ctk.CTkLabel(scrollable, text="Support Vector Machine (SVM):", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="2. Ekstrakcja cech (feature engineering)", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="SVM to metoda uczenia maszynowego, która znajduje optymalną granicę decyzyjną (hiperpłaszczyznę), oddzielającą klasy danych z maksymalnym marginesem.\n"
-             " Działa dobrze w przestrzeniach o wysokiej wymiarowości i potrafi modelować nieliniowe zależności dzięki funkcjom jądra (kernelom). SVM jest skuteczny\n"
-             " przy niewielkiej liczbie próbek i dobrze sprawdza się w detekcji stanu anormalnego urządzeń. Model ten jest szczególnie użyteczny, gdy klasy są wyraźnie\n"
-             " oddzielne. Działa również w wersji regresyjnej jako SVR (Support Vector Regression).",
+        text="Z surowego sygnału drgań system wylicza zestaw cech (features), które opisują jego strukturę statystycznie i fizycznie. Typowe cechy to: \n"
+                "– RMS (średnia energia sygnału),  \n"
+                "– kurtoza (miara 'ostrości' rozkładu),  \n"
+                "– współczynnik kształtu i szczytowy,  \n"
+                "– odchylenie standardowe.  \n"
+                "Cechy te są dużo bardziej informatywne niż surowe dane i umożliwiają efektywne uczenie modeli ML. Proces ten nazywamy inżynierią cech – jest to \n"
+             "kluczowy krok w każdym systemie diagnostycznym. Przed użyciem w modelach dane są standaryzowane (skalowane) np. metodą z-score.",
         font=font_text, justify="left").pack(anchor="w")
 
     # Tool Condition Monitoring
-    ctk.CTkLabel(scrollable, text="Proces przewidywania kondycji:", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="3. Klasyfikacja stanu technicznego – Random Forest / SVM:", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="Proces przewidywania kondycji zaczyna się od zbierania danych pomiarowych z czujników (np. wibracje, temperatura, dźwięk). Następnie dane te są \n"
-             "przetwarzane i opisywane za pomocą cech statystycznych (np. średnia, RMS). Kolejnym krokiem jest trening modelu predykcyjnego na danych historycznych, \n"
-             "gdzie znany jest stan urządzenia. Po wytrenowaniu, model otrzymuje nowe dane i określa aktualną kondycję urządzenia (np. normalna, zużyta, awaryjna). \n"
-             "Przewidywanie kondycji może być klasyfikacją (stan) lub regresją (wskaźnik zużycia). W niektórych przypadkach stosuje się również techniki prognozowania szeregów czasowych.",
+        text="Do oceny stanu technicznego system wykorzystuje klasyfikator, np. Random Forest – algorytm łączący wiele drzew decyzyjnych. Każde drzewo podejmuje\n"
+             " własną decyzję na podstawie zestawu cech, a ostateczny wynik to głosowanie większości. Dzięki temu metoda ta jest odporna na szumy i działa dobrze nawet \n"
+             "przy ograniczonych danych. Alternatywnie może być używany SVM (Support Vector Machine) – który szuka optymalnej granicy (hiperpłaszczyzny), oddzielającej \n"
+             "klasy w przestrzeni cech. Oba modele są trenowane na oznaczonych danych historycznych. Wynik klasyfikacji to etykieta: „normal”, „unbalance”, „misalignment” \n"
+             "lub „wearing” (uszkodzenie), oraz prawdopodobieństwo każdej z klas.",
         font=font_text, justify="left").pack(anchor="w")
 
     # RUL Prediction
-    ctk.CTkLabel(scrollable, text="Przewidywanie RUL (Remaining Useful Life)", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable, text="4. Predykcja pozostałego czasu do awarii (RUL)", font=font_text).pack(anchor="w", pady=(10, 2))
     ctk.CTkLabel(scrollable,
-        text="RUL to przewidywanie pozostałego czasu pracy urządzenia przed wystąpieniem awarii. Model uczony jest na danych historycznych urządzeń podobnego typu, \n"
-             "gdzie znany jest czas awarii. Często wykorzystuje się metody regresji, sieci neuronowe lub modele sekwencyjne (np. LSTM). Model przetwarza dane cech \n"
-             "z czujników i estymuje ile czasu (lub cykli) pozostało do końca życia technicznego. Predykcja RUL jest kluczowa w utrzymaniu predykcyjnym (predictive maintenance). \n"
-             "Wynik pozwala zaplanować naprawy lub wymiany z wyprzedzeniem.",
+        text="Aby przewidzieć ile czasu pozostało do potencjalnej awarii, system używa modelu regresyjnego – np. Random Forest Regressor. \n"
+             "Model ten estymuje wartość ciągłą: RUL (Remaining Useful Life), czyli liczbę dni do momentu, w którym łożysko osiągnie krytyczny poziom zużycia. \n"
+             "Model trenowany jest na danych, w których znany jest czas do awarii, a jego wejściem są cechy sygnału. Dodatkowo system wykorzystuje predykcje z \n"
+             "poszczególnych drzew, aby oszacować odchylenie standardowe i obliczyć przedział ufności – np. 95%, na podstawie rozkładu Gaussa. \n"
+             "Dzięki temu użytkownik widzi nie tylko przewidywaną datę awarii, ale także możliwy margines błędu.",
         font=font_text, justify="left").pack(anchor="w")
 
-    # Image Section (example placeholder)
-    ctk.CTkLabel(scrollable, text="Diagram przetwarzania sygnału", font=font_text).pack(anchor="w", pady=(20, 5))
+    ctk.CTkLabel(scrollable, text="5. Modelowanie i wizualizacja zużycia łożyska", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable,
+                 text="System generuje przebieg zużycia łożyska w czasie, w postaci wykresów dla trzech scenariuszy: łagodnego, średniego i agresywnego. \n"
+                      "Krzywe te bazują na matematycznych funkcjach (potęgowych, sigmoidalnych, wykładniczych), których kształt zależy od wykrytego typu uszkodzenia. \n"
+                      "Przykład: w przypadku uszkodzenia łożyska wykres ma charakter wykładniczy (szybka degradacja), natomiast dla stanu „normal” – funkcję łagodną. \n"
+                      "Zużycie rozpoczyna się od aktualnej wartości (tzw. wear index) i rośnie w kierunku 100%, reprezentując pełne zużycie. Na wykresie wyświetlane są \n"
+                      "również poziomy alarmowe (60%, 80%, 95%) oraz punkty kontrolne, np. sugerowana data następnego testu.",
+                 font=font_text, justify="left").pack(anchor="w")
+
+    ctk.CTkLabel(scrollable, text="6. Prezentacja wyników i rekomendacje", font=font_text).pack(anchor="w", pady=(10, 2))
+    ctk.CTkLabel(scrollable,
+                 text="Wszystkie wyniki analizy – w tym klasyfikacja, przewidywany RUL, wykresy sygnału i zużycia – są prezentowane użytkownikowi w przejrzystej \n"
+                      "formie graficznej i tekstowej. System generuje również rekomendacje: np. natychmiastowe zatrzymanie maszyny, kontrolę smarowania lub planowanie \n"
+                      "serwisu. Interfejs zaprojektowany jest z myślą o intuicyjności, tak aby nawet operatorzy bez wiedzy o ML mogli interpretować dane. \n"
+                      "Dzięki temu użytkownik może podejmować decyzje oparte na danych (predictive maintenance), a nie tylko na harmonogramie. \n"
+                      "To zwiększa niezawodność i redukuje koszty nieplanowanych przestojów.",
+                 font=font_text, justify="left").pack(anchor="w")
+
     try:
         img = Image.open("res/images/img.png")  # <- Wstaw swój obrazek tutaj
         img = img.resize((600, 350))
@@ -966,7 +999,7 @@ Detailed Probabilities:
 • Normal: {condition_result['probabilities']['normal']:.2%}
 • Unbalance: {condition_result['probabilities']['unbalance']:.2%}
 • Misalignment: {condition_result['probabilities']['misalignment']:.2%}
-• Bearing Issue: {condition_result['probabilities']['bearing']:.2%}
+• Wearing Issue: {condition_result['probabilities']['wearing']:.2%}
 """
 
     if rul_result:

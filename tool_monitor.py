@@ -60,8 +60,8 @@ def get_folder_name(folderName):
     folder = folderName.lower()
     if folder == 'normal':
         return 'normal'
-    elif folder == 'bearing':
-        return 'bearing'
+    elif folder == 'wearing':
+        return 'wearing'
     elif folder == 'unbalance':
         return 'unbalance'
     elif folder == 'misalignment':
@@ -182,8 +182,6 @@ def signal_FFT(data):
         filterType  = filter type // low or lp - lowpass, high or hp - highpass
         order       = filter order
 '''
-
-
 def signal_filter(data, fs, freqLimit, filterType, order):
     Wn = freqLimit / (fs / 2)
     b, a = butter(order, Wn, btype=filterType, analog=False)
@@ -284,7 +282,7 @@ def plot_axis_features(axis, featureList, labels):
     fig, axs = plt.subplots(3, 3, figsize=(15, 8), dpi=100)
     axs = axs.flatten()
 
-    startBear = labels.count('bearing')
+    startBear = labels.count('wearing')
     startMisal = startBear + labels.count('misalignment')
     startNorm = startMisal + labels.count('normal')
     startUnbal = startNorm + labels.count('unbalance')
@@ -294,14 +292,14 @@ def plot_axis_features(axis, featureList, labels):
     print(startMisal)
 
     for i, (plotname, values) in enumerate(axis_features.items()):
-        bearing = moving_average(values[:1000])
+        wearing = moving_average(values[:1000])
         misal = moving_average(values[1000:2000])
         normal = moving_average(values[2000:3000])
         unbal = moving_average(values[3000:4000])
 
         x = np.arange(1000)
 
-        axs[i].plot(x, bearing, label='Bearing')
+        axs[i].plot(x, wearing, label='Wearing')
         axs[i].plot(x, normal, label='Normal')
         axs[i].plot(x, unbal, label='Unbalance')
         axs[i].plot(x, misal, label='Misalignment')
@@ -326,7 +324,7 @@ def plot_axis_features_from_file(fig, axis, feature, segment_size):
     data = feature[column_names]
 
     segments = {
-        'Bearing': data.iloc[0:segment_size],
+        'Wearing': data.iloc[0:segment_size],
         'Unbalance': data.iloc[segment_size:2 * segment_size],
         'Normal': data.iloc[2 * segment_size:3 * segment_size],
         'Misalignment': data.iloc[3 * segment_size:4 * segment_size],
@@ -381,7 +379,7 @@ def prepare_training_data(features, labels):
     scaler = StandardScaler()
     XScaled = scaler.fit_transform(dfFeature)
 
-    labelMap = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'bearing': 3}
+    labelMap = {'normal': 0, 'unbalance': 1, 'misalignment': 2, 'wearing': 3}
     y = np.array([labelMap[label] for label in labels])
 
     print(f"Features prepared: {len(feature_names)} features")
@@ -453,7 +451,7 @@ def train_model(X, y, modelType='random_forest'):
         'test_samples': len(XTest),
         'feature_count': X.shape[1],
         'classification_report': classification_report(yTest, yPred,
-                                                       target_names=['normal', 'unbalance', 'misalignment', 'bearing'],
+                                                       target_names=['normal', 'unbalance', 'misalignment', 'wearing'],
                                                        output_dict=True)
     }
 
@@ -463,7 +461,7 @@ def train_model(X, y, modelType='random_forest'):
 
     print("Condition Model Performance:")
     print(classification_report(yTest, yPred,
-                                target_names=['normal', 'unbalance', 'misalignment', 'bearing']))
+                                target_names=['normal', 'unbalance', 'misalignment', 'wearing']))
 
     return model
 
@@ -595,7 +593,7 @@ def save_model(filepath, feature_list, saveReadable=True):
                 report = training_metadata['classification_report']
                 f.write(f"Overall Accuracy: {report['accuracy']:.3f}\n\n")
 
-                for class_name in ['normal', 'unbalance', 'misalignment', 'bearing']:
+                for class_name in ['normal', 'unbalance', 'misalignment', 'wearing']:
                     if class_name in report:
                         f.write(f"{class_name.capitalize()}:\n")
                         f.write(f"  Precision: {report[class_name]['precision']:.3f}\n")
@@ -680,7 +678,7 @@ def predict_condition(filepath):
     probabilities = model.predict_proba(X_scaled)[0]
 
     # Convert to readable format
-    condition_map = {0: 'normal', 1: 'unbalance', 2: 'misalignment', 3: 'bearing'}
+    condition_map = {0: 'normal', 1: 'unbalance', 2: 'misalignment', 3: 'wearing'}
     predicted_condition = condition_map[prediction]
 
     # Generate enhanced recommendations
@@ -693,7 +691,7 @@ def predict_condition(filepath):
             'normal': float(probabilities[0]),
             'unbalance': float(probabilities[1]),
             'misalignment': float(probabilities[2]),
-            'bearing': float(probabilities[3])
+            'wearing': float(probabilities[3])
         },
         'recommendations': recommendations,
     }
