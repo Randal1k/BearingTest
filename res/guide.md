@@ -18,12 +18,13 @@ Aplikacja umożliwia trenowanie modeli uczenia maszynowego do klasyfikacji stanu
 
 2 PRZYGOTOWANIE DANYCH
    Dane powinny być zorganizowane tak:
-
-   training_data/
-   ├── bearing/
-   ├── misalignment/
-   ├── normal/
-   └── unbalance/
+   
+   res/
+   └data/
+      ├── misalignment/
+      ├── normal/
+      ├── unbalance/
+      └── wearing/
 
    Każdy plik CSV: kolumny t, x, y, z (czas + przyspieszenia w danych osiach)
 
@@ -70,7 +71,7 @@ Aplikacja umożliwia trenowanie modeli uczenia maszynowego do klasyfikacji stanu
 
 💡 TYPY Łożysk:
    • Normal – normalne / poprawne 
-   • Bearing – zespute / wystepujące szumy
+   • Wearing – zespute / wystepujące szumy
    • Unbalance – niewyważone łożysko
    • Misalignment – niewspółosiowe łożysko
 
@@ -79,11 +80,12 @@ Aplikacja umożliwia trenowanie modeli uczenia maszynowego do klasyfikacji stanu
 📈 ZAKŁADKA WYNIKÓW
 
 Zawiera:
+• Graficzne przedstawienie zużycia łożyska
+• Graficzne przedstawienie parametrów sygnału
 • Postęp treningu
 • Wyniki modelu
 • Szczegóły testów
 • Dziennik aktywności
-• Przycisk "Clear" do wyczyszczenie ekranu
 
 ═══════════════════════════════════════════════════════════
 

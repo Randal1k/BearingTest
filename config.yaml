@@ -327,3 +327,42 @@ export:
   # Image export
   plot_export_dpi: 300
   plot_export_format: "png"
+
+wear_curve_settings:
+  # mapowanie trybów zużycia dla poszczególnych stanów
+  mode_map:
+    normal: power
+    unbalance: logarithmic
+    misalignment: logarithmic
+    wearing: logarithmic
+
+  # mapowanie severity dla poszczególnych stanów
+  severity_map:
+    normal: 0.8
+    unbalance: 1.4
+    misalignment: 2.2
+    wearing: 3.0
+
+  # scenariusze (nazwa, mnożnik severity, kolor)
+  scenarios:
+    - [łagodny, 0.5, green]
+    - [średni, 1.0, orange]
+    - [agresywny, 2.0, red]
+
+  # poziomy alarmowe [%]
+  thresholds:
+    warning: 60
+    critical: 80
+    failure: 95
+
+  # style wykresu
+  scenario_linewidth: 2
+  threshold_linestyle: "--"
+  threshold_alpha: 0.5
+
+  # legenda
+  legend_fontsize: 9
+  legend_loc: lower center
+  legend_ncol: 2
+  legend_bottom_anchor: -0.5
+  bottom_margin: 0.3

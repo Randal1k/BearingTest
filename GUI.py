@@ -1,9 +1,17 @@
+import sys
+import os
+
+# --- START: Fix dla --noconsole ---
+if sys.stdout is None or sys.stderr is None:
+    log_path = os.path.join(os.path.dirname(sys.executable), "app.log")
+    sys.stdout = open(log_path, "w", encoding="utf-8")
+    sys.stderr = sys.stdout
+
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 import tkinter as tk
 
 import threading
-import os
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -469,38 +477,23 @@ def update_results_plots(filepath, condition_result, rul_result):
         # === WYKRES ZUŻYCIA ===
         fig_prob.clear()
         ax2 = fig_prob.add_subplot(111)
+        cfg = CONFIG["wear_curve_settings"]
 
         rul_days = rul_result['rul_days']
         wear_now = np.clip(rul_result.get("wear_index", 0.3), 0.01, 0.99)
         total_time = rul_days * 1.5
         time = np.linspace(0, total_time, 300)
 
-        mode_map = {
-            "normal": "power",
-            "unbalance": "logarithmic",
-            "misalignment": "logarithmic",
-            "wearing": "logarithmic"
-        }
         print("condition_result:", condition_result)
         condition_label = condition_result.get("condition", "").lower()
-        mode = mode_map.get(condition_label, "power")
+        mode = cfg["mode_map"].get(condition_label, "power")
+        base_severity = cfg["severity_map"].get(condition_label, 1.0)
 
-        severity_map = {
-            "normal": 0.8,
-            "unbalance": 1.4,
-            "misalignment": 2.2,
-            "wearing": 3
-        }
-        base_severity = severity_map.get(condition_label)
-        scenarios = [
-            ("łagodny", base_severity * 0.5, "green"),
-            ("średni", base_severity, "orange"),
-            ("agresywny", base_severity * 2, "red")
-        ]
-
-        for label, scenario_severity, color in scenarios:
-            curve = compute_wear_curve(time, wear_now, rul_days, scenario_severity, mode)
-            ax2.plot(time, curve, label=f"{label} scenariusz", color=color)
+        for label, severity_factor, color in cfg["scenarios"]:
+            curve = compute_wear_curve(
+                time, wear_now, rul_days, base_severity * severity_factor, mode
+            )
+            ax2.plot(time, curve, label=f"{label} scenariusz", color=color, lw=cfg["scenario_linewidth"])
 
         print("RUL:", rul_days, "wear_now:", wear_now, "mode:", mode)
 
@@ -569,96 +562,97 @@ def refresh_available_models():
         log_message(f"Error refreshing models: {str(e)}")
 
 def create_theory_tab():
-    """Create the theory tab for explanations and visuals"""
+    """Create the theory tab for explanations and visuals (responsive version)"""
     theory_tab = notebook.add("📘 Theory")
 
-    # Scrollable frame
-    scrollable = ctk.CTkScrollableFrame(theory_tab, width=800, height=600)
+    # Scrollable frame - bez sztywnego width/height
+    scrollable = ctk.CTkScrollableFrame(theory_tab)
     scrollable.pack(fill="both", expand=True, padx=20, pady=20)
 
     font_header = ctk.CTkFont(size=18, weight="bold")
     font_text = ctk.CTkFont(size=13)
+    font_title = ctk.CTkFont(size=15, weight="bold")
 
-    # Header
-    ctk.CTkLabel(scrollable, text="Jak działa system predykcji uszkodzeń łożyska", font=font_header).pack(anchor="w", pady=(10, 5))
+    labels_to_wrap = []  # lista etykiet z długim tekstem do dynamicznego zawijania
 
-    # Random Forest
-    ctk.CTkLabel(scrollable, text="1. Wczytanie danych pomiarowych", font=font_text).pack(anchor="w", pady=(10, 2))
-    ctk.CTkLabel(scrollable,
-        text="System rozpoczyna pracę od wczytania pliku CSV z sygnałem czasowym zarejestrowanym przez czujniki drgań. Sygnał przedstawia zmiany amplitudy \n"
-             "drgań w funkcji czasu, co jest podstawą do dalszej analizy. Użytkownik wybiera plik wejściowy, a dane są wizualizowane w formie wykresu. Jest to \n"
-             "pierwszy etap diagnostyki, który pozwala wychwycić anomalię gołym okiem oraz upewnić się, że dane zostały poprawnie załadowane.",
-        font=font_text, justify="left").pack(anchor="w")
+    def add_wrapped_label(master, text, font, pady=(0, 0), color="white"):
+        # Na start duży wraplength, żeby nic nie ucięło
+        label = ctk.CTkLabel(master, text=text, font=font, text_color=color,
+                             justify="left", wraplength=2000)
+        label.pack(anchor="w", pady=pady)
+        labels_to_wrap.append(label)
+        return label
 
-    # SVM
-    ctk.CTkLabel(scrollable, text="2. Ekstrakcja cech (feature engineering)", font=font_text).pack(anchor="w", pady=(10, 2))
-    ctk.CTkLabel(scrollable,
-        text="Z surowego sygnału drgań system wylicza zestaw cech (features), które opisują jego strukturę statystycznie i fizycznie. Typowe cechy to: \n"
-                "– RMS (średnia energia sygnału),  \n"
-                "– kurtoza (miara 'ostrości' rozkładu),  \n"
-                "– współczynnik kształtu i szczytowy,  \n"
-                "– odchylenie standardowe.  \n"
-                "Cechy te są dużo bardziej informatywne niż surowe dane i umożliwiają efektywne uczenie modeli ML. Proces ten nazywamy inżynierią cech – jest to \n"
-             "kluczowy krok w każdym systemie diagnostycznym. Przed użyciem w modelach dane są standaryzowane (skalowane) np. metodą z-score.",
-        font=font_text, justify="left").pack(anchor="w")
+    def on_resize(event=None):
+        new_width = scrollable.winfo_width() - 40
+        for lbl in labels_to_wrap:
+            lbl.configure(wraplength=new_width)
 
-    # Tool Condition Monitoring
-    ctk.CTkLabel(scrollable, text="3. Klasyfikacja stanu technicznego – Random Forest / SVM:", font=font_text).pack(anchor="w", pady=(10, 2))
-    ctk.CTkLabel(scrollable,
-        text="Do oceny stanu technicznego system wykorzystuje klasyfikator, np. Random Forest – algorytm łączący wiele drzew decyzyjnych. Każde drzewo podejmuje\n"
-             " własną decyzję na podstawie zestawu cech, a ostateczny wynik to głosowanie większości. Dzięki temu metoda ta jest odporna na szumy i działa dobrze nawet \n"
-             "przy ograniczonych danych. Alternatywnie może być używany SVM (Support Vector Machine) – który szuka optymalnej granicy (hiperpłaszczyzny), oddzielającej \n"
-             "klasy w przestrzeni cech. Oba modele są trenowane na oznaczonych danych historycznych. Wynik klasyfikacji to etykieta: „normal”, „unbalance”, „misalignment” \n"
-             "lub „wearing” (uszkodzenie), oraz prawdopodobieństwo każdej z klas.",
-        font=font_text, justify="left").pack(anchor="w")
+    # === Treść główna ===
+    add_wrapped_label(scrollable, "Jak działa system predykcji uszkodzeń łożyska", font_header, pady=(10, 5))
 
-    # RUL Prediction
-    ctk.CTkLabel(scrollable, text="4. Predykcja pozostałego czasu do awarii (RUL)", font=font_text).pack(anchor="w", pady=(10, 2))
-    ctk.CTkLabel(scrollable,
-        text="Aby przewidzieć ile czasu pozostało do potencjalnej awarii, system używa modelu regresyjnego – np. Random Forest Regressor. \n"
-             "Model ten estymuje wartość ciągłą: RUL (Remaining Useful Life), czyli liczbę dni do momentu, w którym łożysko osiągnie krytyczny poziom zużycia. \n"
-             "Model trenowany jest na danych, w których znany jest czas do awarii, a jego wejściem są cechy sygnału. Dodatkowo system wykorzystuje predykcje z \n"
-             "poszczególnych drzew, aby oszacować odchylenie standardowe i obliczyć przedział ufności – np. 95%, na podstawie rozkładu Gaussa. \n"
-             "Dzięki temu użytkownik widzi nie tylko przewidywaną datę awarii, ale także możliwy margines błędu.",
-        font=font_text, justify="left").pack(anchor="w")
+    # 1. Wczytanie danych pomiarowych
+    add_wrapped_label(scrollable, "1. Wczytanie danych pomiarowych", font_title, pady=(10, 2))
+    add_wrapped_label(scrollable,
+        "System rozpoczyna pracę od wczytania pliku CSV z sygnałem czasowym zarejestrowanym przez czujniki drgań. "
+        "Sygnał przedstawia zmiany amplitudy drgań w funkcji czasu, co jest podstawą do dalszej analizy. "
+        "Użytkownik wybiera plik wejściowy, a dane są wizualizowane w formie wykresu. Jest to pierwszy etap diagnostyki, "
+        "który pozwala wychwycić anomalię gołym okiem oraz upewnić się, że dane zostały poprawnie załadowane.",
+        font_text)
 
-    ctk.CTkLabel(scrollable, text="5. Modelowanie i wizualizacja zużycia łożyska", font=font_text).pack(anchor="w", pady=(10, 2))
-    ctk.CTkLabel(scrollable,
-                 text="System generuje przebieg zużycia łożyska w czasie, w postaci wykresów dla trzech scenariuszy: łagodnego, średniego i agresywnego. \n"
-                      "Krzywe te bazują na matematycznych funkcjach (potęgowych, sigmoidalnych, wykładniczych), których kształt zależy od wykrytego typu uszkodzenia. \n"
-                      "Przykład: w przypadku uszkodzenia łożyska wykres ma charakter wykładniczy (szybka degradacja), natomiast dla stanu „normal” – funkcję łagodną. \n"
-                      "Zużycie rozpoczyna się od aktualnej wartości (tzw. wear index) i rośnie w kierunku 100%, reprezentując pełne zużycie. Na wykresie wyświetlane są \n"
-                      "również poziomy alarmowe (60%, 80%, 95%) oraz punkty kontrolne, np. sugerowana data następnego testu.",
-                 font=font_text, justify="left").pack(anchor="w")
+    # 2. Ekstrakcja cech
+    add_wrapped_label(scrollable, "2. Ekstrakcja cech (feature engineering)", font_title, pady=(10, 2))
+    add_wrapped_label(scrollable,
+        "Z surowego sygnału drgań system wylicza zestaw cech (features), które opisują jego strukturę statystycznie i fizycznie. "
+        "Typowe cechy to: RMS, kurtoza, współczynnik kształtu, współczynnik szczytowy, odchylenie standardowe. "
+        "Cechy te są dużo bardziej informatywne niż surowe dane i umożliwiają efektywne uczenie modeli ML. "
+        "Proces ten nazywamy inżynierią cech – jest to kluczowy krok w każdym systemie diagnostycznym. "
+        "Przed użyciem w modelach dane są standaryzowane (skalowane) np. metodą z-score.",
+        font_text)
 
-    ctk.CTkLabel(scrollable, text="6. Prezentacja wyników i rekomendacje", font=font_text).pack(anchor="w", pady=(10, 2))
-    ctk.CTkLabel(scrollable,
-                 text="Wszystkie wyniki analizy – w tym klasyfikacja, przewidywany RUL, wykresy sygnału i zużycia – są prezentowane użytkownikowi w przejrzystej \n"
-                      "formie graficznej i tekstowej. System generuje również rekomendacje: np. natychmiastowe zatrzymanie maszyny, kontrolę smarowania lub planowanie \n"
-                      "serwisu. Interfejs zaprojektowany jest z myślą o intuicyjności, tak aby nawet operatorzy bez wiedzy o ML mogli interpretować dane. \n"
-                      "Dzięki temu użytkownik może podejmować decyzje oparte na danych (predictive maintenance), a nie tylko na harmonogramie. \n"
-                      "To zwiększa niezawodność i redukuje koszty nieplanowanych przestojów.",
-                 font=font_text, justify="left").pack(anchor="w")
+    # 3. Klasyfikacja stanu technicznego
+    add_wrapped_label(scrollable, "3. Klasyfikacja stanu technicznego – Random Forest / SVM", font_title, pady=(10, 2))
+    add_wrapped_label(scrollable,
+        "Do oceny stanu technicznego system wykorzystuje klasyfikator, np. Random Forest – algorytm łączący wiele drzew decyzyjnych. "
+        "Każde drzewo podejmuje własną decyzję na podstawie zestawu cech, a ostateczny wynik to głosowanie większości. "
+        "Dzięki temu metoda ta jest odporna na szumy i działa dobrze nawet przy ograniczonych danych. "
+        "Alternatywnie może być używany SVM (Support Vector Machine), który szuka optymalnej granicy oddzielającej klasy w przestrzeni cech. "
+        "Oba modele są trenowane na oznaczonych danych historycznych, a wynik klasyfikacji to etykieta oraz prawdopodobieństwo każdej z klas.",
+        font_text)
 
+    # 4. Predykcja RUL
+    add_wrapped_label(scrollable, "4. Predykcja pozostałego czasu do awarii (RUL)", font_title, pady=(10, 2))
+    add_wrapped_label(scrollable,
+        "Aby przewidzieć ile czasu pozostało do potencjalnej awarii, system używa modelu regresyjnego – np. Random Forest Regressor. "
+        "Model ten estymuje wartość ciągłą: RUL (Remaining Useful Life), czyli liczbę dni do momentu, w którym łożysko osiągnie krytyczny poziom zużycia. "
+        "Dodatkowo system wykorzystuje predykcje z poszczególnych drzew, aby oszacować odchylenie standardowe i obliczyć przedział ufności, "
+        "co pozwala określić margines błędu prognozy.",
+        font_text)
+
+    # 5. Modelowanie zużycia
+    add_wrapped_label(scrollable, "5. Modelowanie i wizualizacja zużycia łożyska", font_title, pady=(10, 2))
+    add_wrapped_label(scrollable,
+        "System generuje przebieg zużycia łożyska w czasie dla trzech scenariuszy: łagodnego, średniego i agresywnego. "
+        "Krzywe te bazują na matematycznych funkcjach, których kształt zależy od wykrytego typu uszkodzenia. "
+        "Na wykresie wyświetlane są także poziomy alarmowe oraz punkty kontrolne, np. sugerowana data następnego testu.",
+        font_text)
+
+    # 6. Prezentacja wyników
+    add_wrapped_label(scrollable, "6. Prezentacja wyników i rekomendacje", font_title, pady=(10, 2))
+    add_wrapped_label(scrollable,
+        "Wszystkie wyniki analizy – klasyfikacja, przewidywany RUL, wykresy sygnału i zużycia – są prezentowane w formie graficznej i tekstowej. "
+        "System generuje rekomendacje dotyczące dalszej eksploatacji maszyny, co wspiera podejmowanie decyzji w oparciu o dane.",
+        font_text)
+
+    # === Obrazek ===
     try:
-        img = Image.open("res/images/img.png")  # <- Wstaw swój obrazek tutaj
-        img = img.resize((600, 350))
+        img = Image.open("res/images/img.png")
         img_tk = ImageTk.PhotoImage(img)
-        label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")  # tkinter label for image
+        label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")
         label_img.image = img_tk
         label_img.pack(pady=10)
     except Exception as e:
-        ctk.CTkLabel(scrollable, text=f"[Image not loaded: {e}]", font=font_text, text_color="gray").pack(anchor="w")
-
-    # Footer
-    ctk.CTkLabel(scrollable,
-        text=" ",
-        font=font_text, justify="left", text_color="gray").pack(anchor="w", pady=(20, 10))
-
-    # === Feature explanations below canvas ===
-
-    font_title = ctk.CTkFont(size=15, weight="bold")
-    font_text = ctk.CTkFont(size=13)
+        add_wrapped_label(scrollable, f"[Image not loaded: {e}]", font_text, color="gray")
 
     # List of features and corresponding image files
     features_info = [
@@ -676,25 +670,23 @@ def create_theory_tab():
     image_refs = []
 
     for name, desc, img_file in features_info:
-        label = ctk.CTkLabel(scrollable, text=f"• {name}", font=font_title, anchor="w", justify="left")
-        label.pack(anchor="w", padx=10, pady=(6, 0))
-
-        desc_label = ctk.CTkLabel(scrollable, text=desc, font=font_text, text_color="white", wraplength=720,
-                                  justify="left")
-        desc_label.pack(anchor="w", padx=30)
-
+        add_wrapped_label(scrollable, f"• {name}", font_title, pady=(6, 0))
+        add_wrapped_label(scrollable, desc, font_text)
         try:
             img_path = os.path.join("res/images/features", img_file)
             img = Image.open(img_path)
-            img= img.resize((100,50))
             img_tk = ImageTk.PhotoImage(img)
             label_img = tk.Label(scrollable, image=img_tk, bg="#2b2b2b")
             label_img.image = img_tk
-            label_img.pack(pady=10)
-        except Exception as e:
-            fallback = ctk.CTkLabel(scrollable, text=f"[Nie można załadować wzoru: {img_file}]",
-                                    text_color="gray", font=font_text)
-            fallback.pack(anchor="w", padx=30, pady=(0, 10))
+            label_img.pack(pady=5)
+        except:
+            add_wrapped_label(scrollable, f"[Nie można załadować wzoru: {img_file}]", font_text, color="gray")
+
+        # === Aktualizacja wraplength przy zmianie rozmiaru okna ===
+
+    theory_tab.bind("<Configure>", on_resize)
+    theory_tab.update()
+    on_resize()
 
 def count_csv_files(folder_path):
     """Count total CSV files in all subfolders"""
